@@ -111,7 +111,7 @@ export const listInvestors = async (filters?: Partial<Investor>): Promise<Invest
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-          query = query.eq(dbKey, value);
+          query = (query as any).eq(dbKey, value);
         }
       });
     }

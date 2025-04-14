@@ -72,11 +72,13 @@ export async function canPerformAction(action: string): Promise<boolean> {
   if (!userRole) return false;
   
   // Get permissions for the user's role
-  const { data, error } = await supabase
+  let query = supabase
     .from("role_permissions")
-    .select("*")
-    .eq("role", userRole)
-    .single();
+    .select("*");
+  
+  query = (query as any).eq("role", userRole).single();
+  
+  const { data, error } = await query;
   
   if (error || !data) {
     console.error("Error fetching permissions:", error);

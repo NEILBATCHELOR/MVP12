@@ -105,7 +105,7 @@ const DocumentManager = ({ projectId, investorId }: DocumentManagerProps) => {
         .eq("project_id", projectId);
 
       if (investorId) {
-        query = query.eq("investor_id", investorId);
+        query = (query as any).eq("investor_id", investorId);
       }
 
       if (categoryFilter !== "all") {

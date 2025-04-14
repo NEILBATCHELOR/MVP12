@@ -131,11 +131,13 @@ export const getDocuments = async (
   try {
     // Try to use Supabase if available
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("documents")
-        .select("*")
-        .eq("organization_id", organizationId)
-        .order("date_updated", { ascending: false });
+        .select("*");
+      
+      query = (query as any).eq("organization_id", organizationId).order("date_updated", { ascending: false });
+      
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) {
         // Transform data to match our interface
@@ -424,11 +426,13 @@ export const updateJsonMetadata = async (
     const typedTableName = tableName as TableNames;
 
     // Instead of using rpc for jsonb_set, we'll fetch the record, update the JSON, and save it back
-    const { data: record, error: fetchError } = await supabase
+    let query = supabase
       .from(typedTableName)
-      .select(`id, ${jsonField}`)
-      .eq("id", id)
-      .single();
+      .select(`id, ${jsonField}`);
+    
+    query = (query as any).eq("id", id).single();
+    
+    const { data: record, error: fetchError } = await query;
 
     if (fetchError) {
       console.error(`Error fetching record from ${tableName}:`, fetchError);
@@ -454,12 +458,13 @@ export const updateJsonMetadata = async (
     target[path[path.length - 1]] = value;
 
     // Update the record with the modified JSON
-    const { data, error } = await supabase
+    let updateQuery = supabase
       .from(typedTableName)
-      .update({ [jsonField]: jsonData })
-      .eq("id", id)
-      .select()
-      .single();
+      .update({ [jsonField]: jsonData });
+      
+    updateQuery = (updateQuery as any).eq("id", id).select().single();
+    
+    const { data, error } = await updateQuery;
 
     if (error) {
       console.error(`Error updating JSON in ${tableName}:`, error);

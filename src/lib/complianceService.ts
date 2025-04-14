@@ -57,8 +57,8 @@ export async function verifyKyc(
 
     // Update the user's KYC status in the database
     // Note: using snake_case for database fields
-    const { error } = await supabase
-      .from("investors")
+    const { error } = await (supabase
+      .from("investors") as any)
       .update({
         kyc_status: "Completed",
         kyc_verified_at: verificationResult.verifiedAt,
@@ -95,8 +95,8 @@ export async function checkAccreditationStatus(
 
     // Update the user's accreditation status in the database using the verification_details JSON field
     // which is part of the schema, rather than trying to add new fields
-    const { data, error } = await supabase
-      .from("investors")
+    const { data, error } = await (supabase
+      .from("investors") as any)
       .select("verification_details")
       .eq("user_id", userId)
       .single();
@@ -108,7 +108,7 @@ export async function checkAccreditationStatus(
 
     // Get existing verification details or create new object
     const existingDetails: VerificationDetails = 
-      (typeof data?.verification_details === 'object' && data?.verification_details !== null)
+      (data && typeof data.verification_details === 'object' && data.verification_details !== null)
         ? data.verification_details as VerificationDetails
         : {};
     
@@ -121,8 +121,8 @@ export async function checkAccreditationStatus(
       accreditation_expires_at: accreditationStatus.expiresAt,
     };
 
-    const { error: updateError } = await supabase
-      .from("investors")
+    const { error: updateError } = await (supabase
+      .from("investors") as any)
       .update({
         verification_details: updatedDetails as Json,
       })
@@ -286,8 +286,8 @@ export async function calculateRiskScore(
     }
 
     // Get existing verification details or create new object
-    const { data, error } = await supabase
-      .from("investors")
+    const { data, error } = await (supabase
+      .from("investors") as any)
       .select("verification_details")
       .eq("user_id", userId)
       .single();
@@ -299,7 +299,7 @@ export async function calculateRiskScore(
 
     // Get existing verification details or create new object
     const existingDetails: VerificationDetails = 
-      (typeof data?.verification_details === 'object' && data?.verification_details !== null)
+      (data && typeof data.verification_details === 'object' && data.verification_details !== null)
         ? data.verification_details as VerificationDetails
         : {};
     
@@ -312,8 +312,8 @@ export async function calculateRiskScore(
     };
 
     // Update the user's risk information in the verification_details JSON field
-    const { error: updateError } = await supabase
-      .from("investors")
+    const { error: updateError } = await (supabase
+      .from("investors") as any)
       .update({
         verification_details: updatedDetails as Json,
       })

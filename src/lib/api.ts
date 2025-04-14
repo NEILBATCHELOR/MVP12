@@ -119,18 +119,18 @@ export async function updateKycStatus(
   notes?: string,
 ): Promise<ApiResponse<Database['public']['Tables']['compliance_settings']['Row']>> {
   try {
-    const { data, error } = await executeWithRetry(() => 
-      supabase
+    const { data, error } = await executeWithRetry(() => {
+      let query = supabase
         .from("compliance_settings")
         .update({
           kyc_status: status,
           kyc_notes: notes,
           updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId)
-        .select()
-        .single()
-    );
+        });
+      
+      query = (query as any).eq("user_id", userId).select().single();
+      return query;
+    });
 
     if (error) throw error;
 

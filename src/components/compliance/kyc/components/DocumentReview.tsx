@@ -1,6 +1,21 @@
 import React, { useState } from 'react';
-import { Box, Typography, Button, Card, CardContent, CardActions, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, Grid, Paper } from '@mui/material';
 import { InvestorDocument, InvestorDocumentStatus } from '@/types/centralModels';
+
+// Import shadcn/ui components
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 
 interface DocumentReviewProps {
   document: InvestorDocument;
@@ -50,182 +65,185 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
     });
   };
 
-  const getStatusChip = (status: InvestorDocumentStatus) => {
+  const getStatusBadge = (status: InvestorDocumentStatus) => {
     switch (status) {
       case InvestorDocumentStatus.APPROVED:
-        return <Chip label="Approved" color="success" />;
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Approved</Badge>;
       case InvestorDocumentStatus.REJECTED:
-        return <Chip label="Rejected" color="error" />;
+        return <Badge variant="destructive">Rejected</Badge>;
       case InvestorDocumentStatus.PENDING:
-        return <Chip label="Pending" color="warning" />;
+        return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200">Pending</Badge>;
       case InvestorDocumentStatus.EXPIRED:
-        return <Chip label="Expired" color="error" />;
+        return <Badge variant="destructive">Expired</Badge>;
       case InvestorDocumentStatus.REQUIRES_UPDATE:
-        return <Chip label="Update Required" color="info" />;
+        return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200">Update Required</Badge>;
       default:
-        return <Chip label={status} />;
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   return (
-    <Card elevation={3}>
-      <CardContent>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h5" component="h2">
-                {document.name}
-              </Typography>
-              {getStatusChip(document.status)}
-            </Box>
-            <Typography color="textSecondary" gutterBottom>
-              {document.description || 'No description available'}
-            </Typography>
-          </Grid>
+    <Card className="shadow-md">
+      <CardContent className="p-6">
+        <div className="grid grid-cols-1 gap-4">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-xl font-semibold">
+              {document.name}
+            </h2>
+            {getStatusBadge(document.status)}
+          </div>
+          <p className="text-gray-500 text-sm">
+            {document.description || 'No description available'}
+          </p>
 
-          <Grid item xs={12}>
-            <Divider />
-          </Grid>
+          <Separator className="my-2" />
 
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="textSecondary">
-              Document Type
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              {document.documentType}
-            </Typography>
-          </Grid>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">
+                Document Type
+              </p>
+              <p className="font-medium">
+                {document.documentType}
+              </p>
+            </div>
 
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="textSecondary">
-              Uploaded On
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              {formatDate(document.createdAt)}
-            </Typography>
-          </Grid>
+            <div>
+              <p className="text-sm text-gray-500">
+                Uploaded On
+              </p>
+              <p className="font-medium">
+                {formatDate(document.createdAt)}
+              </p>
+            </div>
 
-          {document.reviewedBy && (
-            <>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Reviewed By
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {document.reviewedBy}
-                </Typography>
-              </Grid>
+            {document.reviewedBy && (
+              <>
+                <div>
+                  <p className="text-sm text-gray-500">
+                    Reviewed By
+                  </p>
+                  <p className="font-medium">
+                    {document.reviewedBy}
+                  </p>
+                </div>
 
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Reviewed On
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {formatDate(document.reviewedAt)}
-                </Typography>
-              </Grid>
-            </>
-          )}
+                <div>
+                  <p className="text-sm text-gray-500">
+                    Reviewed On
+                  </p>
+                  <p className="font-medium">
+                    {formatDate(document.reviewedAt)}
+                  </p>
+                </div>
+              </>
+            )}
 
-          {document.expiresAt && (
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="textSecondary">
-                Expires On
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {formatDate(document.expiresAt)}
-              </Typography>
-            </Grid>
-          )}
+            {document.expiresAt && (
+              <div>
+                <p className="text-sm text-gray-500">
+                  Expires On
+                </p>
+                <p className="font-medium">
+                  {formatDate(document.expiresAt)}
+                </p>
+              </div>
+            )}
+          </div>
 
           {document.status === InvestorDocumentStatus.REJECTED && document.rejectionReason && (
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" color="error">
+            <div className="mt-4">
+              <p className="text-sm text-red-600 font-medium">
                 Rejection Reason
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: '#fff5f5' }}>
-                <Typography variant="body2">
+              </p>
+              <div className="border border-red-200 p-4 rounded-md bg-red-50 mt-1">
+                <p className="text-sm">
                   {document.rejectionReason}
-                </Typography>
-              </Paper>
-            </Grid>
+                </p>
+              </div>
+            </div>
           )}
 
-          <Grid item xs={12}>
-            <Box mt={2}>
-              <Paper variant="outlined" sx={{ p: 1, height: 400, overflow: 'auto' }}>
-                {document.documentUrl.toLowerCase().endsWith('.pdf') ? (
-                  <iframe 
+          <div className="mt-4">
+            <div className="border rounded-md p-1 h-[400px] overflow-auto">
+              {document.documentUrl.toLowerCase().endsWith('.pdf') ? (
+                <iframe 
+                  src={document.documentUrl} 
+                  width="100%" 
+                  height="100%" 
+                  title={document.name} 
+                  className="border-none"
+                />
+              ) : (
+                <div className="flex justify-center items-center h-full">
+                  <img 
                     src={document.documentUrl} 
-                    width="100%" 
-                    height="100%" 
-                    title={document.name} 
-                    style={{ border: 'none' }}
+                    alt={document.name} 
+                    className="max-w-full max-h-full object-contain" 
                   />
-                ) : (
-                  <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                    <img 
-                      src={document.documentUrl} 
-                      alt={document.name} 
-                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
-                    />
-                  </Box>
-                )}
-              </Paper>
-            </Box>
-          </Grid>
-        </Grid>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </CardContent>
 
       {document.status === InvestorDocumentStatus.PENDING && (
-        <CardActions sx={{ justifyContent: 'flex-end', px: 2, pb: 2 }}>
+        <CardFooter className="justify-end p-6 pt-2">
           <Button 
-            variant="outlined" 
-            color="error" 
+            variant="outline"
+            className="mr-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
             onClick={handleRejectDialogOpen}
           >
             Reject
           </Button>
           <Button 
-            variant="contained" 
-            color="primary" 
             onClick={handleApprove}
           >
             Approve
           </Button>
-        </CardActions>
+        </CardFooter>
       )}
 
-      <Dialog open={rejectDialogOpen} onClose={handleRejectDialogClose} maxWidth="sm" fullWidth>
-        <DialogTitle>Reject Document</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="textSecondary" paragraph>
-            Please provide a reason for rejecting this document. This information will be shared with the investor.
-          </Typography>
-          <TextField
-            autoFocus
-            margin="dense"
-            id="rejection-reason"
-            label="Rejection Reason"
-            type="text"
-            fullWidth
-            multiline
-            rows={4}
-            value={rejectionReason}
-            onChange={(e) => setRejectionReason(e.target.value)}
-            error={!!error}
-            helperText={error}
-            variant="outlined"
-          />
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => !open && handleRejectDialogClose()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Document</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this document. This information will be shared with the investor.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4">
+            <Textarea
+              autoFocus
+              id="rejection-reason"
+              placeholder="Enter rejection reason"
+              rows={4}
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              className={error ? "border-red-500" : ""}
+            />
+            {error && (
+              <p className="text-red-500 text-xs mt-1">{error}</p>
+            )}
+          </div>
+          
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={handleRejectDialogClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+            >
+              Confirm Rejection
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleRejectDialogClose} color="inherit">
-            Cancel
-          </Button>
-          <Button onClick={handleReject} color="error" variant="contained">
-            Confirm Rejection
-          </Button>
-        </DialogActions>
       </Dialog>
     </Card>
   );

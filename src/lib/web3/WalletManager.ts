@@ -590,12 +590,13 @@ export class WalletManager {
         }
 
         // Get an EOA wallet to use as signer
-        const { data: eoaWallets, error } = await supabase
+        let eoaQuery = supabase
           .from("multi_sig_wallets")
-          .select("*")
-          .eq("created_by", this.userId)
-          .eq("type", WalletType.EOA)
-          .limit(1);
+          .select("*");
+          
+        eoaQuery = (eoaQuery as any).eq("created_by", this.userId).eq("type", WalletType.EOA).limit(1);
+        
+        const { data: eoaWallets, error } = await eoaQuery;
 
         if (error) throw error;
         if (!eoaWallets || eoaWallets.length === 0) {
@@ -716,11 +717,13 @@ export class WalletManager {
   async getWalletTransactions(walletId: string): Promise<Transaction[]> {
     try {
       // Get transactions from database
-      const { data, error } = await supabase
+      let query = supabase
         .from("wallet_transactions")
-        .select("*")
-        .eq("wallet_id", walletId)
-        .order("timestamp", { ascending: false });
+        .select("*");
+      
+      query = (query as any).eq("wallet_id", walletId).order("timestamp", { ascending: false });
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -855,12 +858,13 @@ export class WalletManager {
 
         // We need a signer to submit the transaction
         // Get an EOA wallet to use as signer
-        const { data: eoaWallets, error } = await supabase
+        let eoaQuery = supabase
           .from("multi_sig_wallets")
-          .select("*")
-          .eq("created_by", this.userId)
-          .eq("type", WalletType.EOA)
-          .limit(1);
+          .select("*");
+          
+        eoaQuery = (eoaQuery as any).eq("created_by", this.userId).eq("type", WalletType.EOA).limit(1);
+        
+        const { data: eoaWallets, error } = await eoaQuery;
 
         if (error) throw error;
         if (!eoaWallets || eoaWallets.length === 0) {
@@ -1027,10 +1031,10 @@ export class WalletManager {
         // Note: The actual schema doesn't have wallet_id
       };
 
-      // Use type assertion to bypass TypeScript checks
-      const { error } = await supabase
-        .from("wallet_transactions")
-        .insert(txData as any);
+      // Use type assertion directly on supabase.from call
+      const { error } = await (supabase
+        .from("wallet_transactions") as any)
+        .insert(txData);
 
       if (error) throw error;
 

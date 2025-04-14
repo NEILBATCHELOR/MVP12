@@ -130,19 +130,24 @@ export const getHighRiskInvestors = async (
 
     // Transform data for the UI
     const transformedData =
-      data?.map((check) => ({
-        id: check.id,
-        investor_id: check.investor_id,
-        name: check.investors?.name,
-        email: check.investors?.email,
-        risk_level: check.risk_level,
-        risk_reason: check.risk_reason,
-        status: check.status,
-        reviewed_by: check.reviewed_by,
-        reviewed_at: check.reviewed_at,
-        subscription_id: check.subscriptions?.[0]?.id,
-        amount: check.subscriptions?.[0]?.fiat_amount || 0,
-      })) || [];
+      data?.map((check) => {
+        // Properly cast subscriptions with unknown to avoid type errors
+        const subscriptions = (check.subscriptions as unknown) as Array<{ id: string, fiat_amount: number }> | undefined;
+        
+        return {
+          id: check.id,
+          investor_id: check.investor_id,
+          name: check.investors?.name,
+          email: check.investors?.email,
+          risk_level: check.risk_level,
+          risk_reason: check.risk_reason,
+          status: check.status,
+          reviewed_by: check.reviewed_by,
+          reviewed_at: check.reviewed_at,
+          subscription_id: subscriptions && subscriptions[0] ? subscriptions[0].id : undefined,
+          amount: subscriptions && subscriptions[0] ? subscriptions[0].fiat_amount || 0 : 0,
+        };
+      }) || [];
 
     return transformedData;
   } catch (error) {
@@ -181,12 +186,13 @@ export const updateComplianceCheckStatus = async (
 // Check if a user has compliance officer role
 export const isComplianceOfficer = async (userId: string): Promise<boolean> => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("user_roles")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("role", "compliance_officer")
-      .single();
+      .select("*");
+    
+    query = (query as any).eq("user_id", userId).eq("role", "compliance_officer").single();
+    
+    const { data, error } = await query;
 
     if (error && error.code !== "PGRST116") throw error; // PGRST116 is "no rows returned"
     return !!data;

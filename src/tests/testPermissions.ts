@@ -35,11 +35,13 @@ async function testPermissions() {
     
     // Test direct role_permissions query
     console.log('\n2. Testing direct role_permissions query:');
-    const { data: rolePerms, error: rolePermsError } = await supabase
+    let query = supabase
       .from('role_permissions')
-      .select('role_id')
-      .eq('permission_id', 'policy_rules.approve')
-      .eq('effect', 'allow');
+      .select('role_id');
+    
+    query = (query as any).eq('permission_id', 'policy_rules.approve').eq('effect', 'allow');
+    
+    const { data: rolePerms, error: rolePermsError } = await query;
     
     if (rolePermsError) {
       console.error('Error fetching role_permissions:', rolePermsError);

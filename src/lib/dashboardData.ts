@@ -148,25 +148,31 @@ export const getWalletData = async (
 }> => {
   try {
     // Try to fetch source wallets
-    const { data: sourceData, error: sourceError } = await supabase
+    let sourceQuery = supabase
       .from("multi_sig_wallets")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .eq("wallet_type", "source");
+      .select("*");
+    
+    sourceQuery = (sourceQuery as any).eq("organization_id", organizationId).eq("wallet_type", "source");
+    
+    const { data: sourceData, error: sourceError } = await sourceQuery;
 
     // Try to fetch issuance wallets
-    const { data: issuanceData, error: issuanceError } = await supabase
+    let issuanceQuery = supabase
       .from("multi_sig_wallets")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .eq("wallet_type", "issuance");
+      .select("*");
+    
+    issuanceQuery = (issuanceQuery as any).eq("organization_id", organizationId).eq("wallet_type", "issuance");
+    
+    const { data: issuanceData, error: issuanceError } = await issuanceQuery;
 
     // Try to fetch whitelist settings
-    const { data: whitelistData, error: whitelistError } = await supabase
+    let whitelistQuery = supabase
       .from("whitelist_settings")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .single();
+      .select("*");
+    
+    whitelistQuery = (whitelistQuery as any).eq("organization_id", organizationId).single();
+    
+    const { data: whitelistData, error: whitelistError } = await whitelistQuery;
 
     // Transform data if available
     const sourceWallets =
@@ -192,7 +198,7 @@ export const getWalletData = async (
     const whitelistSettings =
       !whitelistError && whitelistData
         ? {
-            enabled: Boolean(whitelistData.required_approvals > 0), // Use required_approvals to determine if enabled
+            enabled: Boolean((whitelistData as any).required_approvals > 0), // Use required_approvals to determine if enabled
             addresses: [], // Whitelist addresses would need to be fetched separately
           }
         : defaultWhitelistSettings;
@@ -203,7 +209,7 @@ export const getWalletData = async (
         const { data: addressData } = await supabase
           .from("whitelist_signatories")
           .select("user_id")
-          .eq("whitelist_id", whitelistData.id);
+          .eq("whitelist_id", (whitelistData as any).id);
           
         if (addressData && addressData.length > 0) {
           whitelistSettings.addresses = addressData.map(item => item.user_id).filter(Boolean);

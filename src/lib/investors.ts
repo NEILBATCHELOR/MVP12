@@ -51,11 +51,13 @@ export async function getInvestors(): Promise<DomainInvestor[]> {
 export async function getInvestor(
   investorId: string,
 ): Promise<DomainInvestor | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("investors")
-    .select("*")
-    .eq("id", investorId)
-    .single();
+    .select("*");
+  
+  query = (query as any).eq("id", investorId).single();
+  
+  const { data, error } = await query;
 
   if (error) {
     console.error(`Error fetching investor ${investorId}:`, error);
@@ -87,8 +89,8 @@ export async function createInvestor(
     updated_at: now,
   };
 
-  const { data, error } = await supabase
-    .from("investors")
+  const { data, error } = await (supabase
+    .from("investors") as any)
     .insert(newInvestor)
     .select()
     .single();
@@ -124,12 +126,13 @@ export async function updateInvestor(
   if (updates.walletAddress !== undefined)
     updateData.wallet_address = updates.walletAddress;
 
-  const { data, error } = await supabase
+  let updateQuery = supabase
     .from("investors")
-    .update(updateData)
-    .eq("id", investorId)
-    .select()
-    .single();
+    .update(updateData);
+    
+  updateQuery = (updateQuery as any).eq("id", investorId).select().single();
+  
+  const { data, error } = await updateQuery;
 
   if (error) {
     console.error(`Error updating investor ${investorId}:`, error);
@@ -262,8 +265,8 @@ export const deleteInvestor = async (investorId: string): Promise<void> => {
     }
 
     // Finally, delete the investor
-    const { error } = await supabase
-      .from("investors")
+    const { error } = await (supabase
+      .from("investors") as any)
       .delete()
       .eq("id", investorId);
 
@@ -285,10 +288,10 @@ export const getInvestorSubscriptions = async (
 ): Promise<any[]> => {
   try {
     // Get subscriptions for this investor
+    // @ts-ignore: Ignoring type instantiation issues with Supabase
     const { data: subscriptions, error: subscriptionsError } = await supabase
       .from("subscriptions")
-      .select(
-        `
+      .select(`
         id,
         investor_id,
         project_id,
@@ -301,8 +304,7 @@ export const getInvestorSubscriptions = async (
         distributed,
         notes,
         projects(name)
-      `,
-      )
+      `)
       .eq("investor_id", investorId);
 
     if (subscriptionsError) {
@@ -710,8 +712,8 @@ export const updateInvestorKYC = async (
     updated_at: now,
   };
 
-  const { data, error } = await supabase
-    .from("investors")
+  const { data, error } = await (supabase
+    .from("investors") as any)
     .update(updates)
     .eq("id", investorId)
     .select()

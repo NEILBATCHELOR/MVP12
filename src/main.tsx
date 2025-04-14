@@ -5,8 +5,7 @@ import "./index.css";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthProvider";
 import { WalletProvider } from "./context/WalletContext";
-import { ThemeProvider } from "@mui/material/styles";
-import muiTheme from "./theme/mui-theme";
+// Remove MUI imports
 // Import the inert polyfill
 import { initInertPolyfill } from "./lib/inertPolyfill";
 // Import dialog accessibility fix
@@ -33,9 +32,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter basename={basename}>
       <AuthProvider>
         <WalletProvider>
-          <ThemeProvider theme={muiTheme}>
-            <App />
-          </ThemeProvider>
+          <App />
         </WalletProvider>
       </AuthProvider>
     </BrowserRouter>
