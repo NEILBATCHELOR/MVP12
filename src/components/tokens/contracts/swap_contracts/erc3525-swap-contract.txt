@@ -1,0 +1,431 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
+/**
+ * @title IERC3525
+ * @dev Interface for the ERC3525 Semi-Fungible Token Standard
+ */
+interface IERC3525 {
+    function balanceOf(address owner) external view returns (uint256);
+    function slotOf(uint256 tokenId) external view returns (uint256);
+    function valueDecimals() external view returns (uint8);
+    function balanceOf(uint256 tokenId) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+    function transferFrom(address from, address to, uint256 tokenId) external;
+    function transferFrom(uint256 fromTokenId, address to, uint256 value) external returns (uint256 newTokenId);
+    function transferFrom(uint256 fromTokenId, uint256 toTokenId, uint256 value) external;
+    function approve(address to, uint256 tokenId) external;
+    function allowance(uint256 tokenId, address operator) external view returns (uint256);
+    function approve(uint256 tokenId, address to, uint256 value) external;
+    function getApproved(uint256 tokenId) external view returns (address);
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
+    function setApprovalForAll(address operator, bool approved) external;
+    function totalValue(uint256 slot) external view returns (uint256);
+    function slotURI(uint256 slot) external view returns (string memory);
+    function tokenURI(uint256 tokenId) external view returns (string memory);
+    function contractURI() external view returns (string memory);
+    function allTokensInSlot(uint256 slot) external view returns (uint256[] memory);
+}
+
+/**
+ * @title SemiNFTToERC20Wrapper
+ * @dev Converts ERC3525 Semi-Fungible Tokens to ERC20 tokens for trading and liquidity
+ */
+contract SemiNFTToERC20Wrapper is ERC20, ERC20Burnable, Ownable, Pausable, ReentrancyGuard {
+    using SafeMath for uint256;
+    
+    // Token mapping
+    IERC3525 public immutable semiToken;
+    
+    // Slot-specific wrapped tokens
+    mapping(uint256 => address) public slotToToken;
+    mapping(address => uint256) public tokenToSlot;
+    
+    // Oracle for price data
+    AggregatorV3Interface public navOracle;
+    
+    // Records of deposited tokens
+    struct DepositRecord {
+        uint256 tokenId;
+        uint256 value;
+        address originalOwner;
+    }
+    
+    // Track deposits by owner and wrapped token
+    mapping(address => mapping(uint256 => DepositRecord[])) private _deposits;
+    
+    // Track total deposit values
+    mapping(uint256 => uint256) public totalDepositedValue;
+    
+    // Redemption queue
+    struct RedemptionRequest {
+        address owner;
+        uint256 slot;
+        uint256 amount;
+        uint256 timestamp;
+        bool processed;
+    }
+    
+    RedemptionRequest[] public redemptionQueue;
+    
+    // Events
+    event SlotWrapped(uint256 indexed slot, address indexed wrappedToken);
+    event TokensWrapped(address indexed owner, uint256 indexed slot, uint256 tokenId, uint256 value, uint256 wrappedAmount);
+    event TokensUnwrapped(address indexed owner, uint256 indexed slot, uint256 amount, uint256 tokenId, uint256 value);
+    event RedemptionRequested(address indexed owner, uint256 indexed slot, uint256 amount, uint256 timestamp);
+    event RedemptionProcessed(address indexed owner, uint256 indexed slot, uint256 amount, uint256 tokenId);
+    event NAVUpdated(uint256 indexed slot, uint256 newNav);
+    
+    /**
+     * @dev Constructor for the wrapper contract
+     * @param _semiToken Address of the ERC3525 token contract
+     * @param _navOracle Address of the NAV oracle
+     */
+    constructor(address _semiToken, address _navOracle) 
+        ERC20("SFT Wrapper Base Token", "SFTW") {
+        require(_semiToken != address(0), "Invalid semi-token address");
+        
+        semiToken = IERC3525(_semiToken);
+        navOracle = AggregatorV3Interface(_navOracle);
+    }
+    
+    /**
+     * @dev Creates a wrapped ERC20 token for a specific slot
+     * @param slot The ERC3525 slot to create a wrapped token for
+     * @param name The name of the wrapped token
+     * @param symbol The symbol of the wrapped token
+     * @return The address of the created wrapped token
+     */
+    function createWrappedToken(uint256 slot, string memory name, string memory symbol) 
+        external onlyOwner returns (address) {
+        require(slotToToken[slot] == address(0), "Wrapped token already exists for slot");
+        
+        // Create a new wrapped token
+        SlotWrappedToken wrappedToken = new SlotWrappedToken(name, symbol, address(this), slot);
+        slotToToken[slot] = address(wrappedToken);
+        tokenToSlot[address(wrappedToken)] = slot;
+        
+        emit SlotWrapped(slot, address(wrappedToken));
+        
+        return address(wrappedToken);
+    }
+    
+    /**
+     * @dev Gets the current NAV for a specific slot
+     * @param slot The slot to get the NAV for
+     * @return The current NAV value
+     */
+    function getCurrentNAV(uint256 slot) public view returns (uint256) {
+        try navOracle.latestRoundData() returns (
+            uint80 roundID, 
+            int256 price,
+            uint256 startedAt,
+            uint256 timeStamp,
+            uint80 answeredInRound
+        ) {
+            if (price > 0) {
+                return uint256(price);
+            }
+        } catch {
+            // Fallback to total value divided by supply if oracle fails
+        }
+        
+        // If oracle fails, calculate based on total value and supply
+        uint256 totalValue = semiToken.totalValue(slot);
+        uint256[] memory tokens = semiToken.allTokensInSlot(slot);
+        
+        if (tokens.length == 0 || totalValue == 0) {
+            return 1e18; // Default 1:1 if no data
+        }
+        
+        return totalValue.mul(1e18).div(tokens.length);
+    }
+    
+    /**
+     * @dev Wraps an ERC3525 token to mint wrapped ERC20 tokens
+     * @param tokenId The ID of the ERC3525 token to wrap
+     * @param value The value amount to wrap (can be partial)
+     */
+    function wrap(uint256 tokenId, uint256 value) external whenNotPaused nonReentrant {
+        require(value > 0, "Value must be greater than zero");
+        address owner = semiToken.ownerOf(tokenId);
+        require(owner == msg.sender, "Not the token owner");
+        
+        uint256 tokenBalance = semiToken.balanceOf(tokenId);
+        require(value <= tokenBalance, "Insufficient token value");
+        
+        uint256 slot = semiToken.slotOf(tokenId);
+        address wrappedTokenAddr = slotToToken[slot];
+        require(wrappedTokenAddr != address(0), "No wrapped token for this slot");
+        
+        // Calculate wrapped amount based on current NAV
+        uint256 wrappedAmount = calculateWrappedAmount(slot, value);
+        
+        uint256 newTokenId;
+        // Transfer the ERC3525 token value to this contract
+        if (value == tokenBalance) {
+            // Transfer the entire token
+            semiToken.transferFrom(msg.sender, address(this), tokenId);
+            newTokenId = tokenId;
+        } else {
+            // Transfer a portion of the token's value
+            newTokenId = semiToken.transferFrom(tokenId, address(this), value);
+        }
+        
+        // Record the deposit
+        _deposits[msg.sender][slot].push(DepositRecord({
+            tokenId: newTokenId,
+            value: value,
+            originalOwner: msg.sender
+        }));
+        
+        // Update total deposited value
+        totalDepositedValue[slot] = totalDepositedValue[slot].add(value);
+        
+        // Mint wrapped tokens to sender
+        SlotWrappedToken(wrappedTokenAddr).mint(msg.sender, wrappedAmount);
+        
+        emit TokensWrapped(msg.sender, slot, newTokenId, value, wrappedAmount);
+    }
+    
+    /**
+     * @dev Unwraps ERC20 tokens to redeem underlying ERC3525 tokens
+     * @param slot The slot of the tokens to unwrap
+     * @param amount The amount of wrapped tokens to unwrap
+     */
+    function unwrap(uint256 slot, uint256 amount) external whenNotPaused nonReentrant {
+        require(amount > 0, "Amount must be greater than zero");
+        address wrappedTokenAddr = slotToToken[slot];
+        require(wrappedTokenAddr != address(0), "No wrapped token for this slot");
+        
+        SlotWrappedToken wrappedToken = SlotWrappedToken(wrappedTokenAddr);
+        require(wrappedToken.balanceOf(msg.sender) >= amount, "Insufficient wrapped tokens");
+        
+        // Calculate underlying value based on current NAV
+        uint256 underlyingValue = calculateUnderlyingValue(slot, amount);
+        
+        // Burn wrapped tokens
+        wrappedToken.burnFrom(msg.sender, amount);
+        
+        // Queue redemption request
+        _queueRedemption(msg.sender, slot, amount, underlyingValue);
+        
+        emit TokensUnwrapped(msg.sender, slot, amount, 0, underlyingValue);
+    }
+    
+    /**
+     * @dev Queue a redemption request
+     * @param owner Address of the token owner
+     * @param slot Slot of the token
+     * @param amount Amount of wrapped tokens
+     * @param value Underlying value to redeem
+     */
+    function _queueRedemption(address owner, uint256 slot, uint256 amount, uint256 value) internal {
+        redemptionQueue.push(RedemptionRequest({
+            owner: owner,
+            slot: slot,
+            amount: amount,
+            timestamp: block.timestamp,
+            processed: false
+        }));
+        
+        emit RedemptionRequested(owner, slot, amount, block.timestamp);
+    }
+    
+    /**
+     * @dev Process redemption requests (only callable by owner)
+     * @param count Maximum number of requests to process
+     */
+    function processRedemptions(uint256 count) external onlyOwner nonReentrant {
+        uint256 requestsToProcess = count > redemptionQueue.length ? redemptionQueue.length : count;
+        
+        for (uint256 i = 0; i < requestsToProcess; i++) {
+            if (!redemptionQueue[i].processed) {
+                _processRedemption(i);
+            }
+        }
+    }
+    
+    /**
+     * @dev Process a single redemption request
+     * @param index Index of the redemption request in the queue
+     */
+    function _processRedemption(uint256 index) internal {
+        RedemptionRequest storage request = redemptionQueue[index];
+        
+        if (request.processed) return;
+        
+        address owner = request.owner;
+        uint256 slot = request.slot;
+        uint256 value = calculateUnderlyingValue(slot, request.amount);
+        
+        // Find suitable tokens to fulfill this redemption
+        uint256 remainingValue = value;
+        DepositRecord[] storage deposits = _deposits[address(this)][slot];
+        
+        for (uint256 i = 0; i < deposits.length && remainingValue > 0; i++) {
+            if (deposits[i].value > 0) {
+                uint256 tokenId = deposits[i].tokenId;
+                uint256 tokenValue = deposits[i].value;
+                
+                if (tokenValue <= remainingValue) {
+                    // Transfer entire token
+                    semiToken.transferFrom(address(this), owner, tokenId);
+                    remainingValue = remainingValue.sub(tokenValue);
+                    
+                    // Clear the record
+                    deposits[i].value = 0;
+                } else {
+                    // Transfer partial value
+                    uint256 newTokenId = semiToken.transferFrom(tokenId, owner, remainingValue);
+                    deposits[i].value = tokenValue.sub(remainingValue);
+                    remainingValue = 0;
+                }
+            }
+        }
+        
+        // If there's still remaining value, we'll have to mint/create a new token
+        if (remainingValue > 0) {
+            // This would depend on the specific ERC3525 implementation
+            // Since minting may require owner privileges, this should be handled
+            // by the contract owner through a separate function
+        }
+        
+        // Update total deposited value
+        totalDepositedValue[slot] = totalDepositedValue[slot].sub(value.sub(remainingValue));
+        
+        // Mark as processed
+        request.processed = true;
+        
+        emit RedemptionProcessed(owner, slot, request.amount, 0);
+    }
+    
+    /**
+     * @dev Calculate wrapped token amount for a given value of ERC3525 tokens
+     * @param slot The slot ID
+     * @param value The value of ERC3525 tokens
+     * @return The equivalent amount of wrapped tokens
+     */
+    function calculateWrappedAmount(uint256 slot, uint256 value) public view returns (uint256) {
+        uint256 nav = getCurrentNAV(slot);
+        require(nav > 0, "Invalid NAV");
+        
+        return value.mul(1e18).div(nav);
+    }
+    
+    /**
+     * @dev Calculate underlying value for a given amount of wrapped tokens
+     * @param slot The slot ID
+     * @param amount The amount of wrapped tokens
+     * @return The equivalent value of ERC3525 tokens
+     */
+    function calculateUnderlyingValue(uint256 slot, uint256 amount) public view returns (uint256) {
+        uint256 nav = getCurrentNAV(slot);
+        require(nav > 0, "Invalid NAV");
+        
+        return amount.mul(nav).div(1e18);
+    }
+    
+    /**
+     * @dev Get number of pending redemption requests
+     * @return Number of pending requests
+     */
+    function getPendingRedemptionCount() external view returns (uint256) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < redemptionQueue.length; i++) {
+            if (!redemptionQueue[i].processed) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * @dev Get user's pending redemption amount for a specific slot
+     * @param owner The owner address
+     * @param slot The slot ID
+     * @return Total pending redemption amount
+     */
+    function getUserPendingRedemption(address owner, uint256 slot) external view returns (uint256) {
+        uint256 total = 0;
+        for (uint256 i = 0; i < redemptionQueue.length; i++) {
+            if (!redemptionQueue[i].processed && 
+                redemptionQueue[i].owner == owner && 
+                redemptionQueue[i].slot == slot) {
+                total = total.add(redemptionQueue[i].amount);
+            }
+        }
+        return total;
+    }
+    
+    /**
+     * @dev Update NAV for a slot (only owner)
+     * @param slot The slot ID
+     * @param newNav The new NAV value
+     */
+    function updateNav(uint256 slot, uint256 newNav) external onlyOwner {
+        require(newNav > 0, "NAV must be positive");
+        // This function would interact with the NAV oracle in a real implementation
+        emit NAVUpdated(slot, newNav);
+    }
+    
+    /**
+     * @dev Pause all wrapping and unwrapping (only owner)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+    
+    /**
+     * @dev Unpause wrapping and unwrapping (only owner)
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+}
+
+/**
+ * @title SlotWrappedToken
+ * @dev ERC20 token that represents wrapped ERC3525 tokens for a specific slot
+ */
+contract SlotWrappedToken is ERC20, ERC20Burnable, Ownable {
+    address public wrapper;
+    uint256 public slot;
+    
+    constructor(
+        string memory name,
+        string memory symbol,
+        address _wrapper,
+        uint256 _slot
+    ) ERC20(name, symbol) {
+        wrapper = _wrapper;
+        slot = _slot;
+        transferOwnership(_wrapper);
+    }
+    
+    /**
+     * @dev Mint tokens (only callable by the wrapper contract)
+     * @param to Recipient address
+     * @param amount Amount to mint
+     */
+    function mint(address to, uint256 amount) external onlyOwner {
+        _mint(to, amount);
+    }
+    
+    /**
+     * @dev Burn tokens from an account (only callable by the wrapper contract)
+     * @param from Address to burn from
+     * @param amount Amount to burn
+     */
+    function burnFrom(address from, uint256 amount) external onlyOwner {
+        _burn(from, amount);
+    }
+}

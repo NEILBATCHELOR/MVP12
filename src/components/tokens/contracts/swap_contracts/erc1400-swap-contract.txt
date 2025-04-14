@@ -1,0 +1,305 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
+/**
+ * @title IERC1400
+ * @dev Interface for the ERC1400 Security Token Standard
+ */
+interface IERC1400 {
+    function balanceOf(address account) external view returns (uint256);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+    function isVerifiedInvestor(address investor) external view returns (bool);
+    function requestRedemption(uint256 tokenAmount) external;
+    function navPerToken() external view returns (uint256);
+    function redeemedThisPeriod() external view returns (uint256);
+    function redemptionCap() external view returns (uint256);
+    function lastResetTimestamp() external view returns (uint256);
+    function redemptionPeriod() external view returns (uint256);
+}
+
+/**
+ * @title CliffwaterWrappedToken
+ * @dev ERC20 Wrapped Token for Cliffwater ERC1400 Security Tokens 
+ * Allows trading on secondary markets while maintaining compliance
+ */
+contract CliffwaterWrappedToken is ERC20, ERC20Burnable, Ownable, Pausable {
+    using SafeMath for uint256;
+    
+    // Reference to the underlying ERC1400 token
+    IERC1400 public immutable underlyingToken;
+    
+    // Chainlink Oracle for NAV data
+    AggregatorV3Interface public navOracle;
+    
+    // Mapping of addresses to their locked tokens
+    mapping(address => uint256) private _lockedTokens;
+    
+    // Conversion rate precision (1e18)
+    uint256 private constant RATE_PRECISION = 1e18;
+    
+    // Redemption queue for holding redemption requests
+    struct RedemptionRequest {
+        address investor;
+        uint256 amount;
+        uint256 timestamp;
+        bool processed;
+    }
+    
+    RedemptionRequest[] public redemptionQueue;
+    mapping(address => uint256) public userRedemptionRequests;
+    
+    // Events
+    event TokensWrapped(address indexed account, uint256 underlyingAmount, uint256 wrappedAmount);
+    event TokensUnwrapped(address indexed account, uint256 wrappedAmount, uint256 underlyingAmount);
+    event RedemptionRequested(address indexed investor, uint256 amount, uint256 timestamp);
+    event RedemptionProcessed(address indexed investor, uint256 amount);
+    event NAVUpdated(uint256 newNAV);
+    
+    /**
+     * @dev Constructor that sets the underlying token and NAV oracle
+     * @param _underlyingToken Address of the ERC1400 security token
+     * @param _navOracle Address of the Chainlink NAV Oracle
+     */
+    constructor(address _underlyingToken, address _navOracle) 
+        ERC20("Wrapped Cliffwater Token", "wCTF") {
+        require(_underlyingToken != address(0), "Invalid underlying token address");
+        
+        underlyingToken = IERC1400(_underlyingToken);
+        navOracle = AggregatorV3Interface(_navOracle);
+    }
+    
+    /**
+     * @dev Get the current NAV per token from Oracle or underlying token
+     * @return Current NAV per token
+     */
+    function getCurrentNAV() public view returns (uint256) {
+        try navOracle.latestRoundData() returns (
+            uint80 roundID, 
+            int256 price,
+            uint256 startedAt,
+            uint256 timeStamp,
+            uint80 answeredInRound
+        ) {
+            if (price > 0) {
+                return uint256(price);
+            }
+        } catch {
+            // Fallback to underlying token's NAV if oracle fails
+        }
+        
+        return underlyingToken.navPerToken();
+    }
+    
+    /**
+     * @dev Wrap ERC1400 tokens to mint wrapped ERC20 tokens
+     * @param amount Amount of underlying tokens to wrap
+     */
+    function wrap(uint256 amount) external whenNotPaused {
+        require(amount > 0, "Amount must be greater than zero");
+        require(underlyingToken.isVerifiedInvestor(msg.sender), "Not a verified investor");
+        
+        // Calculate wrapped tokens to mint based on current NAV
+        uint256 wrappedAmount = calculateWrappedAmount(amount);
+        
+        // Transfer underlying tokens from sender to this contract
+        require(underlyingToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        
+        // Mint wrapped tokens to sender
+        _mint(msg.sender, wrappedAmount);
+        
+        emit TokensWrapped(msg.sender, amount, wrappedAmount);
+    }
+    
+    /**
+     * @dev Unwrap ERC20 tokens to redeem underlying ERC1400 tokens
+     * @param amount Amount of wrapped tokens to unwrap
+     */
+    function unwrap(uint256 amount) external whenNotPaused {
+        require(amount > 0, "Amount must be greater than zero");
+        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
+        
+        // Calculate underlying tokens to return based on current NAV
+        uint256 underlyingAmount = calculateUnderlyingAmount(amount);
+        
+        // Check if redemption is within the cap
+        checkRedemptionCap(underlyingAmount);
+        
+        // Burn wrapped tokens from sender
+        _burn(msg.sender, amount);
+        
+        // Queue redemption request (will be processed by fund manager)
+        queueRedemptionRequest(msg.sender, underlyingAmount);
+        
+        emit TokensUnwrapped(msg.sender, amount, underlyingAmount);
+    }
+    
+    /**
+     * @dev Process redemption requests (only callable by owner)
+     * @param count Maximum number of requests to process
+     */
+    function processRedemptions(uint256 count) external onlyOwner {
+        uint256 requestsToProcess = Math.min(count, redemptionQueue.length);
+        
+        for (uint256 i = 0; i < requestsToProcess; i++) {
+            if (!redemptionQueue[i].processed) {
+                address investor = redemptionQueue[i].investor;
+                uint256 amount = redemptionQueue[i].amount;
+                
+                // Mark as processed
+                redemptionQueue[i].processed = true;
+                
+                // Update user's request counter
+                userRedemptionRequests[investor] = userRedemptionRequests[investor].sub(1);
+                
+                // Call underlying token's redemption function
+                underlyingToken.requestRedemption(amount);
+                
+                emit RedemptionProcessed(investor, amount);
+            }
+        }
+    }
+    
+    /**
+     * @dev Calculate the amount of wrapped tokens for a given amount of underlying tokens
+     * @param underlyingAmount Amount of underlying tokens
+     * @return Amount of wrapped tokens
+     */
+    function calculateWrappedAmount(uint256 underlyingAmount) public view returns (uint256) {
+        uint256 nav = getCurrentNAV();
+        require(nav > 0, "Invalid NAV");
+        
+        // 1:1 conversion based on NAV
+        return underlyingAmount.mul(RATE_PRECISION).div(nav);
+    }
+    
+    /**
+     * @dev Calculate the amount of underlying tokens for a given amount of wrapped tokens
+     * @param wrappedAmount Amount of wrapped tokens
+     * @return Amount of underlying tokens
+     */
+    function calculateUnderlyingAmount(uint256 wrappedAmount) public view returns (uint256) {
+        uint256 nav = getCurrentNAV();
+        require(nav > 0, "Invalid NAV");
+        
+        // 1:1 conversion based on NAV
+        return wrappedAmount.mul(nav).div(RATE_PRECISION);
+    }
+    
+    /**
+     * @dev Check if redemption is within the cap
+     * @param underlyingAmount Amount of underlying tokens to redeem
+     */
+    function checkRedemptionCap(uint256 underlyingAmount) internal view {
+        uint256 redeemedThisPeriod = underlyingToken.redeemedThisPeriod();
+        uint256 redemptionCap = underlyingToken.redemptionCap();
+        uint256 lastResetTimestamp = underlyingToken.lastResetTimestamp();
+        uint256 redemptionPeriod = underlyingToken.redemptionPeriod();
+        
+        // Check if we've entered a new period
+        if (block.timestamp >= lastResetTimestamp + redemptionPeriod) {
+            // In a new period, only check against cap
+            require(underlyingAmount <= redemptionCap, "Redemption cap exceeded");
+        } else {
+            // In existing period, check against remaining cap
+            require(redeemedThisPeriod + underlyingAmount <= redemptionCap, "Redemption cap exceeded");
+        }
+    }
+    
+    /**
+     * @dev Queue a redemption request
+     * @param investor Address of the investor
+     * @param amount Amount of underlying tokens
+     */
+    function queueRedemptionRequest(address investor, uint256 amount) internal {
+        redemptionQueue.push(RedemptionRequest({
+            investor: investor,
+            amount: amount,
+            timestamp: block.timestamp,
+            processed: false
+        }));
+        
+        userRedemptionRequests[investor] = userRedemptionRequests[investor].add(1);
+        
+        emit RedemptionRequested(investor, amount, block.timestamp);
+    }
+    
+    /**
+     * @dev Get the number of pending redemption requests
+     * @return Number of pending requests
+     */
+    function getPendingRedemptionCount() external view returns (uint256) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < redemptionQueue.length; i++) {
+            if (!redemptionQueue[i].processed) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * @dev Get user's pending redemption amount
+     * @param investor Address of the investor
+     * @return Total pending redemption amount
+     */
+    function getUserPendingRedemptionAmount(address investor) external view returns (uint256) {
+        uint256 total = 0;
+        for (uint256 i = 0; i < redemptionQueue.length; i++) {
+            if (!redemptionQueue[i].processed && redemptionQueue[i].investor == investor) {
+                total = total.add(redemptionQueue[i].amount);
+            }
+        }
+        return total;
+    }
+    
+    /**
+     * @dev Pause wrapping and unwrapping (only owner)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+    
+    /**
+     * @dev Unpause wrapping and unwrapping (only owner)
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+    
+    /**
+     * @dev Manual update of NAV value (only owner)
+     * @param newNAV New NAV value
+     */
+    function updateNAV(uint256 newNAV) external onlyOwner {
+        require(newNAV > 0, "NAV must be greater than zero");
+        // This function would typically interact with the underlying token
+        // to update its NAV, but we're just emitting an event here
+        emit NAVUpdated(newNAV);
+    }
+    
+    /**
+     * @dev Override transfer to ensure compliance
+     */
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override whenNotPaused {
+        super._beforeTokenTransfer(from, to, amount);
+        
+        // For mint and burn operations, from or to will be address(0)
+        if (from == address(0) || to == address(0)) {
+            return;
+        }
+        
+        // For regular transfers, ensure the recipient is a verified investor
+        require(underlyingToken.isVerifiedInvestor(to), "Recipient not a verified investor");
+    }
+}

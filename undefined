@@ -1,0 +1,10 @@
+import React from "react";
+import { TokenTemplateBuilder } from "@/components/tokens/TokenTemplateBuilder";
+
+export default function TokenTemplateBuilderStoryboard() {
+  return (
+    <div className="p-6 bg-white min-h-screen">
+      <TokenTemplateBuilder />
+    </div>
+  );
+}

@@ -1,0 +1,382 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
+/**
+ * @title ERC1155ToERC20SwapContract
+ * @dev Enables redemption of ERC1155 tokens (representing fund shares or tranches) 
+ * for ERC20 tokens (stablecoins), based on NAV pricing.
+ */
+contract ERC1155ToERC20SwapContract is ERC1155Holder, Ownable, ReentrancyGuard {
+    using SafeMath for uint256;
+    
+    // Token contracts
+    IERC1155 public fundSharesToken; // ERC1155 representing different fund shares/tranches
+    IERC20 public stablecoin;        // ERC20 stablecoin (USDC, etc.)
+    address public fundContract;     // TokenizedCapTable contract
+    
+    // NAV Oracle
+    AggregatorV3Interface public navOracle;
+    
+    // Mapping from ERC1155 tokenId to its properties
+    struct TokenProperties {
+        bool isEnabled;          // Whether this token type is enabled for redemption
+        uint256 navMultiplier;   // NAV multiplier in basis points (10000 = 1x)
+        string name;             // Descriptive name (e.g., "Senior Tranche")
+        uint256 redemptionDelay; // Additional delay for this token type in seconds
+    }
+    
+    mapping(uint256 => TokenProperties) public tokenProperties;
+    
+    // Redemption parameters
+    uint256 public redemptionCap;           // Maximum amount redeemable per period
+    uint256 public redeemedThisPeriod;      // Amount redeemed in current period
+    uint256 public lastResetTimestamp;      // Last time redemptions were reset
+    uint256 public redemptionPeriod;        // Redemption period duration
+    uint256 public minimumRedemptionAmount; // Minimum redemption amount in stablecoin units
+    
+    // Fee parameters
+    uint256 public redemptionFee;           // Fee charged on redemption in basis points (10000 = 100%)
+    address public feeRecipient;            // Address that receives fees
+    
+    // Redemption queue
+    struct RedemptionRequest {
+        address investor;
+        uint256 tokenId;
+        uint256 amount;
+        uint256 requestTimestamp;
+        uint256 stablecoinAmount;
+        bool processed;
+    }
+    
+    RedemptionRequest[] public redemptionQueue;
+    mapping(address => uint256[]) public investorRedemptionRequests; // Investor -> request indexes
+    
+    // Whitelist for investor verification
+    mapping(address => bool) public verifiedInvestors;
+    
+    // Events
+    event RedemptionRequested(address indexed investor, uint256 indexed tokenId, uint256 amount, uint256 stablecoinAmount, uint256 requestIndex);
+    event RedemptionProcessed(address indexed investor, uint256 indexed tokenId, uint256 amount, uint256 stablecoinAmount);
+    event TokenPropertiesUpdated(uint256 indexed tokenId, bool isEnabled, uint256 navMultiplier, string name, uint256 redemptionDelay);
+    event NAVUpdated(uint256 newNAV);
+    event VerifiedInvestorAdded(address indexed investor);
+    event VerifiedInvestorRemoved(address indexed investor);
+    
+    /**
+     * @dev Constructor for the swap contract
+     * @param _fundSharesToken Address of the ERC1155 token contract
+     * @param _stablecoin Address of the stablecoin contract (ERC20)
+     * @param _fundContract Address of the TokenizedCapTable contract
+     * @param _navOracle Address of the NAV oracle
+     */
+    constructor(
+        address _fundSharesToken,
+        address _stablecoin,
+        address _fundContract,
+        address _navOracle
+    ) {
+        fundSharesToken = IERC1155(_fundSharesToken);
+        stablecoin = IERC20(_stablecoin);
+        fundContract = _fundContract;
+        navOracle = AggregatorV3Interface(_navOracle);
+        
+        // Initialize redemption parameters
+        redemptionPeriod = 7 days;
+        redemptionCap = 10000 * 10**18; // 10,000 stablecoin units
+        lastResetTimestamp = block.timestamp;
+        minimumRedemptionAmount = 100 * 10**18; // 100 stablecoin units
+        
+        // Initialize fee parameters
+        redemptionFee = 50; // 0.5% fee (in basis points)
+        feeRecipient = msg.sender;
+    }
+    
+    /**
+     * @dev Get the current NAV from the oracle
+     * @return The current NAV value
+     */
+    function getCurrentNAV() public view returns (uint256) {
+        (, int256 nav, , ,) = navOracle.latestRoundData();
+        require(nav > 0, "Invalid NAV data");
+        return uint256(nav);
+    }
+    
+    /**
+     * @dev Register a token ID for redemption
+     * @param tokenId The ERC1155 token ID to enable for redemption
+     * @param navMultiplier The NAV multiplier in basis points (10000 = 1x)
+     * @param name Descriptive name for the token
+     * @param redemptionDelay Additional delay for this token type in seconds
+     */
+    function registerTokenId(
+        uint256 tokenId,
+        uint256 navMultiplier,
+        string memory name,
+        uint256 redemptionDelay
+    ) external onlyOwner {
+        tokenProperties[tokenId] = TokenProperties({
+            isEnabled: true,
+            navMultiplier: navMultiplier,
+            name: name,
+            redemptionDelay: redemptionDelay
+        });
+        
+        emit TokenPropertiesUpdated(tokenId, true, navMultiplier, name, redemptionDelay);
+    }
+    
+    /**
+     * @dev Update token properties
+     * @param tokenId The ERC1155 token ID to update
+     * @param isEnabled Whether this token type is enabled for redemption
+     * @param navMultiplier The NAV multiplier in basis points (10000 = 1x)
+     * @param name Descriptive name for the token
+     * @param redemptionDelay Additional delay for this token type in seconds
+     */
+    function updateTokenProperties(
+        uint256 tokenId,
+        bool isEnabled,
+        uint256 navMultiplier,
+        string memory name,
+        uint256 redemptionDelay
+    ) external onlyOwner {
+        tokenProperties[tokenId] = TokenProperties({
+            isEnabled: isEnabled,
+            navMultiplier: navMultiplier,
+            name: name,
+            redemptionDelay: redemptionDelay
+        });
+        
+        emit TokenPropertiesUpdated(tokenId, isEnabled, navMultiplier, name, redemptionDelay);
+    }
+    
+    /**
+     * @dev Request redemption of ERC1155 tokens for stablecoins
+     * @param tokenId The ERC1155 token ID to redeem
+     * @param amount The amount of ERC1155 tokens to redeem
+     */
+    function requestRedemption(uint256 tokenId, uint256 amount) external nonReentrant {
+        require(verifiedInvestors[msg.sender], "Investor not verified");
+        require(tokenProperties[tokenId].isEnabled, "Token ID not enabled for redemption");
+        require(amount > 0, "Amount must be greater than 0");
+        require(fundSharesToken.balanceOf(msg.sender, tokenId) >= amount, "Insufficient token balance");
+        
+        // Reset redemptions if new period has started
+        if (block.timestamp >= lastResetTimestamp + redemptionPeriod) {
+            redeemedThisPeriod = 0;
+            lastResetTimestamp = block.timestamp;
+        }
+        
+        // Calculate stablecoin amount based on NAV and token properties
+        uint256 currentNAV = getCurrentNAV();
+        uint256 navAdjusted = currentNAV.mul(tokenProperties[tokenId].navMultiplier).div(10000);
+        uint256 stablecoinAmount = amount.mul(navAdjusted).div(10**18);
+        
+        // Apply redemption fee
+        uint256 feeAmount = stablecoinAmount.mul(redemptionFee).div(10000);
+        uint256 netStablecoinAmount = stablecoinAmount.sub(feeAmount);
+        
+        // Ensure minimum redemption amount
+        require(netStablecoinAmount >= minimumRedemptionAmount, "Below minimum redemption amount");
+        
+        // Check redemption cap
+        require(redeemedThisPeriod + netStablecoinAmount <= redemptionCap, "Redemption cap exceeded");
+        
+        // Transfer ERC1155 tokens from user to this contract
+        fundSharesToken.safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
+        
+        // Add redemption request to queue
+        uint256 requestIndex = redemptionQueue.length;
+        redemptionQueue.push(RedemptionRequest({
+            investor: msg.sender,
+            tokenId: tokenId,
+            amount: amount,
+            requestTimestamp: block.timestamp,
+            stablecoinAmount: netStablecoinAmount,
+            processed: false
+        }));
+        
+        // Track investor's redemption requests
+        investorRedemptionRequests[msg.sender].push(requestIndex);
+        
+        // Update redeemed amount for this period
+        redeemedThisPeriod = redeemedThisPeriod.add(netStablecoinAmount);
+        
+        emit RedemptionRequested(msg.sender, tokenId, amount, netStablecoinAmount, requestIndex);
+    }
+    
+    /**
+     * @dev Process pending redemption requests
+     * @param maxRequestsToProcess Maximum number of requests to process
+     */
+    function processRedemptions(uint256 maxRequestsToProcess) external onlyOwner nonReentrant {
+        require(maxRequestsToProcess > 0, "Must process at least one request");
+        
+        uint256 requestsProcessed = 0;
+        
+        for (uint256 i = 0; i < redemptionQueue.length && requestsProcessed < maxRequestsToProcess; i++) {
+            RedemptionRequest storage request = redemptionQueue[i];
+            
+            // Skip already processed requests
+            if (request.processed) {
+                continue;
+            }
+            
+            // Check if the request has waited long enough
+            if (block.timestamp < request.requestTimestamp + tokenProperties[request.tokenId].redemptionDelay) {
+                continue;
+            }
+            
+            // Process the redemption request
+            request.processed = true;
+            
+            // Transfer stablecoins to the investor
+            require(stablecoin.transfer(request.investor, request.stablecoinAmount), "Stablecoin transfer failed");
+            
+            // Burn or transfer tokens to fund contract
+            // (Depending on your implementation, you might want to burn tokens or handle them differently)
+            
+            emit RedemptionProcessed(
+                request.investor,
+                request.tokenId,
+                request.amount,
+                request.stablecoinAmount
+            );
+            
+            requestsProcessed++;
+        }
+    }
+    
+    /**
+     * @dev Get pending redemption requests for an investor
+     * @param investor The address of the investor
+     * @return Array of RedemptionRequest indexes for the investor
+     */
+    function getInvestorRedemptionRequests(address investor) external view returns (uint256[] memory) {
+        return investorRedemptionRequests[investor];
+    }
+    
+    /**
+     * @dev Get redemption request details
+     * @param requestIndex The index of the redemption request
+     * @return The RedemptionRequest struct
+     */
+    function getRedemptionRequestDetails(uint256 requestIndex) external view returns (
+        address investor,
+        uint256 tokenId,
+        uint256 amount,
+        uint256 requestTimestamp,
+        uint256 stablecoinAmount,
+        bool processed
+    ) {
+        require(requestIndex < redemptionQueue.length, "Invalid request index");
+        
+        RedemptionRequest storage request = redemptionQueue[requestIndex];
+        return (
+            request.investor,
+            request.tokenId,
+            request.amount,
+            request.requestTimestamp,
+            request.stablecoinAmount,
+            request.processed
+        );
+    }
+    
+    /**
+     * @dev Calculate the stablecoin amount for a given ERC1155 token amount
+     * @param tokenId The ERC1155 token ID
+     * @param amount The amount of ERC1155 tokens
+     * @return The equivalent stablecoin amount
+     */
+    function calculateStablecoinAmount(uint256 tokenId, uint256 amount) external view returns (uint256) {
+        require(tokenProperties[tokenId].isEnabled, "Token ID not enabled for redemption");
+        
+        uint256 currentNAV = getCurrentNAV();
+        uint256 navAdjusted = currentNAV.mul(tokenProperties[tokenId].navMultiplier).div(10000);
+        uint256 stablecoinAmount = amount.mul(navAdjusted).div(10**18);
+        
+        // Apply redemption fee
+        uint256 feeAmount = stablecoinAmount.mul(redemptionFee).div(10000);
+        uint256 netStablecoinAmount = stablecoinAmount.sub(feeAmount);
+        
+        return netStablecoinAmount;
+    }
+    
+    /**
+     * @dev Add an investor to the whitelist
+     * @param investor The address of the investor to add
+     */
+    function addVerifiedInvestor(address investor) external onlyOwner {
+        verifiedInvestors[investor] = true;
+        emit VerifiedInvestorAdded(investor);
+    }
+    
+    /**
+     * @dev Remove an investor from the whitelist
+     * @param investor The address of the investor to remove
+     */
+    function removeVerifiedInvestor(address investor) external onlyOwner {
+        verifiedInvestors[investor] = false;
+        emit VerifiedInvestorRemoved(investor);
+    }
+    
+    /**
+     * @dev Set the redemption cap
+     * @param _redemptionCap The new redemption cap
+     */
+    function setRedemptionCap(uint256 _redemptionCap) external onlyOwner {
+        redemptionCap = _redemptionCap;
+    }
+    
+    /**
+     * @dev Set the redemption period
+     * @param _redemptionPeriod The new redemption period
+     */
+    function setRedemptionPeriod(uint256 _redemptionPeriod) external onlyOwner {
+        redemptionPeriod = _redemptionPeriod;
+    }
+    
+    /**
+     * @dev Set the minimum redemption amount
+     * @param _minimumRedemptionAmount The new minimum redemption amount
+     */
+    function setMinimumRedemptionAmount(uint256 _minimumRedemptionAmount) external onlyOwner {
+        minimumRedemptionAmount = _minimumRedemptionAmount;
+    }
+    
+    /**
+     * @dev Set the redemption fee
+     * @param _redemptionFee The new redemption fee in basis points
+     */
+    function setRedemptionFee(uint256 _redemptionFee) external onlyOwner {
+        require(_redemptionFee <= 1000, "Fee too high"); // Max 10%
+        redemptionFee = _redemptionFee;
+    }
+    
+    /**
+     * @dev Set the fee recipient
+     * @param _feeRecipient The new fee recipient address
+     */
+    function setFeeRecipient(address _feeRecipient) external onlyOwner {
+        require(_feeRecipient != address(0), "Invalid address");
+        feeRecipient = _feeRecipient;
+    }
+    
+    /**
+     * @dev Withdraw any accidentally sent ERC20 tokens
+     * @param token The ERC20 token to withdraw
+     */
+    function withdrawERC20(address token) external onlyOwner {
+        IERC20 erc20Token = IERC20(token);
+        uint256 balance = erc20Token.balanceOf(address(this));
+        require(balance > 0, "No tokens to withdraw");
+        require(erc20Token.transfer(owner(), balance), "Transfer failed");
+    }
+}
