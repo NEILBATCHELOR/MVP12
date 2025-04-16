@@ -22,7 +22,9 @@ import type {
   TokenDeploymentTable,
   OrganizationTable,
   InvestorTable,
-  InvestorApprovalTable
+  InvestorApprovalTable,
+  DistributionTable,
+  DistributionRedemptionTable
 } from "./database";
 
 // Base Models (DB-Aligned)
@@ -96,6 +98,8 @@ export interface Project extends BaseModel {
   legalEntity?: string;
   jurisdiction?: string;
   taxId?: string;
+  isPrimary?: boolean;
+  issuerDocuments?: IssuerDocument[];
 }
 
 export enum ProjectStatus {
@@ -725,3 +729,73 @@ export type TokenDesignData = TokenDesignTable & Partial<TokenTemplate>;
 export type OrganizationData = OrganizationTable & Partial<Organization>;
 export type InvestorData = InvestorTable & Partial<Investor>;
 export type InvestorApprovalData = InvestorApprovalTable & Partial<InvestorApproval>;
+export type DistributionData = DistributionTable & Partial<Distribution>;
+export type DistributionRedemptionData = DistributionRedemptionTable & Partial<DistributionRedemption>;
+
+/**
+ * Issuer Document interface for project document uploads
+ */
+export interface IssuerDocument extends BaseModel {
+  projectId: string;
+  documentType: IssuerDocumentType;
+  documentUrl: string;
+  documentName: string;
+  uploadedAt: string;
+  updatedAt?: string;
+  uploadedBy?: string;
+  status: 'active' | 'archived' | 'pending_review';
+  metadata?: Record<string, any>;
+}
+
+export enum IssuerDocumentType {
+  ISSUER_CREDITWORTHINESS = 'issuer_creditworthiness',
+  PROJECT_SECURITY_TYPE = 'project_security_type',
+  OFFERING_DETAILS = 'offering_details',
+  TERM_SHEET = 'term_sheet',
+  SPECIAL_RIGHTS = 'special_rights',
+  UNDERWRITERS = 'underwriters',
+  USE_OF_PROCEEDS = 'use_of_proceeds',
+  FINANCIAL_HIGHLIGHTS = 'financial_highlights',
+  TIMING = 'timing',
+  RISK_FACTORS = 'risk_factors',
+  LEGAL_REGULATORY_COMPLIANCE = 'legal_regulatory_compliance'
+}
+
+/**
+ * Distribution interface representing a confirmed token distribution with blockchain data
+ */
+export interface Distribution {
+  id: string;
+  tokenAllocationId: string;
+  investorId: string;
+  subscriptionId: string;
+  projectId?: string;
+  tokenType: string;
+  tokenAmount: number;
+  distributionDate: string;
+  distributionTxHash: string;
+  walletId?: string;
+  blockchain: string;
+  tokenAddress?: string;
+  tokenSymbol?: string;
+  toAddress: string;
+  walletAddress?: string;
+  status: 'confirmed';
+  notes?: string;
+  remainingAmount: number;
+  fullyRedeemed: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
+ * DistributionRedemption interface representing the relationship between distributions and redemption requests
+ */
+export interface DistributionRedemption {
+  id: string;
+  distributionId: string;
+  redemptionRequestId: string;
+  amountRedeemed: number;
+  createdAt: string;
+  updatedAt?: string;
+}

@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 import type { Tables } from "../types/supabase";
 import { v4 as uuidv4 } from 'uuid';
+import { executeWithRetry } from "../lib/supabase";
 
 // Helper function to check if a string is a valid UUID
 export function isValidUUID(str: string): boolean {
@@ -211,12 +212,17 @@ export const getEntityDetails = async (entityId: string, entityType: 'rule' | 't
     // Ensure we have a valid UUID
     const safeEntityId = ensureUUID(entityId);
     
+    // Determine the table and ID column based on entity type
     const table = entityType === 'rule' ? 'rules' : 'policy_templates';
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .eq(entityType === 'rule' ? 'rule_id' : 'template_id', safeEntityId)
-      .single();
+    const idField = entityType === 'rule' ? 'rule_id' : 'template_id';
+    
+    // Suppress TypeScript deep instantiation error with directive comment
+    // @ts-ignore - Supabase typing causes excessive type instantiation
+    const response = await supabase.from(table).select('*').eq(idField, safeEntityId).single();
+    
+    // Manually extract data and error to avoid type propagation
+    const data = response.data as Record<string, any> | null;
+    const error = response.error as Error | null;
 
     if (error) throw error;
     return data;

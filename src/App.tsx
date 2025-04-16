@@ -25,6 +25,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import MFASettingsPage from "./pages/MFASettingsPage";
 import UserMFAPage from "./pages/UserMFAPage";
 import EnhancedApprovalDashboard from "./components/rules/EnhancedApprovalDashboard";
+import ProjectDetailsPage from "./components/projects/ProjectDetailsPage";
+import ProjectDetail from "./components/projects/ProjectDetail";
 
 // Wallet Pages
 import NewWalletPage from "./components/wallet/NewWalletPage";
@@ -95,6 +97,10 @@ function App() {
                 <Route path="dashboard" element={<CapTableDashboard />} />
                 <Route path="projects" element={<Home />} />
                 <Route path="activity" element={<ActivityMonitorPage />} />
+
+                {/* Project Routes */}
+                <Route path="projects/:projectId" element={<ProjectDetailsPage />} />
+                <Route path="projects/:projectId/documents" element={<Navigate to="../?tab=issuer-documents" replace />} />
 
                 {/* Wallet Routes */}
                 <Route path="wallet/new" element={<NewWalletPage />} />

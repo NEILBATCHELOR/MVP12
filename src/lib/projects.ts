@@ -18,6 +18,7 @@ export interface ProjectFormData {
   legalEntity?: string;
   jurisdiction?: string;
   taxId?: string;
+  isPrimary?: boolean;
 }
 
 // Fetch all projects
@@ -83,7 +84,16 @@ export async function createProject(
     tax_id: projectData.taxId || null,
     created_at: now,
     updated_at: now,
+    is_primary: projectData.isPrimary || false,
   };
+
+  // If this project is set as primary, first unset any existing primary projects
+  if (newProject.is_primary) {
+    await supabase
+      .from("projects")
+      .update({ is_primary: false })
+      .eq("is_primary", true);
+  }
 
   const { data, error } = await supabase
     .from("projects")
@@ -123,7 +133,17 @@ export const updateProject = async (
     jurisdiction: projectData.jurisdiction,
     tax_id: projectData.taxId,
     updated_at: now,
+    is_primary: projectData.isPrimary || false,
   };
+
+  // If this project is set as primary, first unset any existing primary projects
+  if (dbProject.is_primary) {
+    await supabase
+      .from("projects")
+      .update({ is_primary: false })
+      .not("id", "eq", id) // Don't update the current project
+      .eq("is_primary", true);
+  }
 
   const { data, error } = await supabase
     .from("projects")
@@ -232,59 +252,77 @@ export const deleteProject = async (id: string): Promise<void> => {
 
 // Get project statistics
 export const getProjectStatistics = async (id: string) => {
-  // Get cap table data
-  const { data: capTable, error: capTableError } = await supabase
-    .from("cap_tables")
-    .select("id")
-    .eq("project_id", id)
-    .single();
-
-  if (capTableError && capTableError.code !== "PGRST116") {
-    // PGRST116 is "no rows returned"
-    console.error(`Error fetching cap table for project ${id}:`, capTableError);
-    throw capTableError;
-  }
-
+  // Default values to return if there's an error
   let investorCount = 0;
   let totalAllocation = 0;
 
-  if (capTable) {
-    // Get investor count
-    const { count: invCount, error: countError } = await supabase
-      .from("cap_table_investors")
-      .select("id", { count: "exact" })
-      .eq("cap_table_id", capTable.id);
-
-    if (countError) {
-      console.error(`Error counting investors for project ${id}:`, countError);
-      throw countError;
+  try {
+    // Get investor count from subscriptions - this is the primary source of truth
+    const { count: subCount, error: subCountError } = await supabase
+      .from("subscriptions")
+      .select("investor_id", { count: "exact", head: true })
+      .eq("project_id", id);
+      
+    if (!subCountError && subCount !== null) {
+      investorCount = subCount;
+      console.log(`Found ${investorCount} investors in subscriptions for project ${id}`);
+    } else if (subCountError) {
+      console.error("Error counting investors from subscriptions:", subCountError);
     }
-
-    investorCount = invCount || 0;
-
-    // Get total allocation - use a safer approach for querying
+    
+    // Get total allocation/raised amount
     try {
-      const { data: investors, error: investorsError } = await supabase
-        .from("cap_table_investors")
-        .select("investor_id")
-        .eq("cap_table_id", capTable.id);
-
-      if (investorsError) {
-        console.error(
-          `Error fetching investors for project ${id}:`,
-          investorsError,
-        );
-        throw investorsError;
+      const { data: subscriptions, error: subError } = await supabase
+        .from("subscriptions")
+        .select("fiat_amount")
+        .eq("project_id", id);
+        
+      if (!subError && subscriptions && subscriptions.length > 0) {
+        totalAllocation = subscriptions.reduce((sum, sub) => sum + (sub.fiat_amount || 0), 0);
+        console.log(`Total allocation for project ${id}: ${totalAllocation}`);
+      } else if (subError) {
+        console.error("Error getting subscription amounts:", subError);
       }
-
-      // Instead of trying to join, just calculate a simple count
-      totalAllocation = investors.length;
     } catch (error) {
       console.error(`Error calculating total allocation: ${error}`);
-      totalAllocation = 0;
     }
+    
+    // Fall back to cap table data if no subscriptions found and investorCount is 0
+    if (investorCount === 0) {
+      console.log(`No investors found in subscriptions for project ${id}, checking cap tables`);
+      
+      // Get cap table data
+      const { data: capTables, error: capTableError } = await supabase
+        .from("cap_tables")
+        .select("id")
+        .eq("project_id", id);
+
+      if (!capTableError && capTables && capTables.length > 0) {
+        // Get the cap table IDs
+        const capTableIds = capTables.map(table => table.id);
+        console.log(`Found ${capTableIds.length} cap tables for project ${id}`);
+
+        // Get investor count across all cap tables
+        const { count: invCount, error: countError } = await supabase
+          .from("cap_table_investors")
+          .select("id", { count: "exact" })
+          .in("cap_table_id", capTableIds);
+
+        if (!countError && invCount !== null) {
+          investorCount = invCount;
+          console.log(`Found ${investorCount} investors across all cap tables`);
+        } else if (countError) {
+          console.error("Error counting investors from cap tables:", countError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error in getProjectStatistics for project ${id}:`, error);
   }
 
+  console.log(`Returning statistics for project ${id}:`, { investorCount, totalAllocation });
+  
+  // Return the statistics (default values if there were errors)
   return {
     investorCount,
     totalAllocation,

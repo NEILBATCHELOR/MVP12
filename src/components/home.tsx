@@ -36,12 +36,23 @@ const Home: React.FC = () => {
           description: "Project not found",
           variant: "destructive",
         });
+        setIsLoading(false);
         return;
       }
 
-      const stats = await getProjectStatistics(projectId);
+      // Create the project UI before fetching statistics
       const projectUI = mapProjectToProjectUI(project);
-      projectUI.totalInvestors = stats.investorCount;
+      
+      try {
+        // Fetch statistics separately with its own error handling
+        const stats = await getProjectStatistics(projectId);
+        console.log("Project statistics loaded successfully:", stats);
+        projectUI.totalInvestors = stats.investorCount;
+      } catch (statsError) {
+        console.error("Error fetching project statistics:", statsError);
+        // Use default value if statistics fetch fails
+        projectUI.totalInvestors = 0;
+      }
 
       setSelectedProject(projectUI);
     } catch (err) {

@@ -180,16 +180,81 @@ const TokenBuilder: React.FC<TokenBuilderProps> = ({
 
   // Fetch tokens when component mounts
   useEffect(() => {
-    if (currentProjectId) {
+    if (!currentProjectId) {
+      // If no project ID is provided, fetch the primary project
+      fetchPrimaryProject();
+    } else if (currentProjectId !== "undefined" && currentProjectId !== undefined) {
       fetchTokens();
       fetchTokenTemplates();
       fetchProjectDetails();
+    } else {
+      console.log("Invalid project ID, fetching primary project instead");
+      fetchPrimaryProject();
     }
   }, [currentProjectId]);
+
+  // Function to fetch the primary project and navigate to it
+  const fetchPrimaryProject = async () => {
+    try {
+      console.log("No project ID provided, fetching primary project...");
+      
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("is_primary", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error("Error fetching primary project:", error);
+        // If no primary project found, fetch any project
+        if (error.code === 'PGRST116') {
+          const { data: anyProject, error: anyError } = await supabase
+            .from("projects")
+            .select("id, name")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (anyError) {
+            console.error("Error fetching any project:", anyError);
+            return;
+          }
+          
+          if (anyProject) {
+            console.log("No primary project found, using first available project:", anyProject);
+            // Navigate to the first available project
+            navigate(`/tokens/${anyProject.id}`);
+          }
+        }
+        return;
+      }
+
+      if (data) {
+        console.log("Found primary project:", data);
+        // Navigate to the primary project
+        navigate(`/tokens/${data.id}`);
+      }
+    } catch (err) {
+      console.error("Error in fetchPrimaryProject:", err);
+    }
+  };
 
   // Fetch project details
   const fetchProjectDetails = async () => {
     try {
+      // Validate project ID before making the request
+      if (!currentProjectId || currentProjectId === "undefined") {
+        console.log("Invalid project ID detected in fetchProjectDetails:", currentProjectId);
+        toast({
+          title: "Error",
+          description: "Invalid project ID. Redirecting to primary project.",
+        });
+        fetchPrimaryProject();
+        return;
+      }
+
       const { data, error } = await supabase
         .from("projects")
         .select("name")
@@ -203,17 +268,23 @@ const TokenBuilder: React.FC<TokenBuilderProps> = ({
     }
   };
 
-  // Load tokens using the new service layer
+  // Fetch tokens
   const fetchTokens = async () => {
     try {
+      // Validate project ID before making the request
+      if (!currentProjectId || currentProjectId === "undefined") {
+        console.log("Invalid project ID detected in fetchTokens:", currentProjectId);
+        return;
+      }
+      
       setLoadingTokens(true);
-      const data = await getTokens(currentProjectId);
-      setTokens(data as unknown as ExtendedTokenData[]);
-    } catch (error) {
-      console.error("Error fetching tokens:", error);
+      const tokens = await getTokens(currentProjectId);
+      setTokens(tokens || []);
+    } catch (err) {
+      console.error("Error fetching tokens:", err);
       toast({
         title: "Error",
-        description: "Failed to load tokens",
+        description: "Failed to load tokens. Please try again.",
         variant: "destructive",
       });
     } finally {

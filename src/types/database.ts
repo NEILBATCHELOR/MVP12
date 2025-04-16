@@ -41,9 +41,12 @@ export type TokenDesignTable = Tables<'token_templates'>;
 export type TokenVersionTable = Tables<'token_versions'>;
 export type TokenDeploymentTable = Tables<'token_deployments'>;
 export type IssuerDocumentTable = Tables<'issuer_documents'>;
+export type IssuerDetailDocumentTable = Tables<'issuer_detail_documents'>;
 export type OrganizationTable = Tables<'organizations'>;
 export type InvestorTable = Tables<'investors'>;
 export type InvestorApprovalTable = Tables<'investor_approvals'>;
+export type DistributionTable = Tables<'distributions'>;
+export type DistributionRedemptionTable = Tables<'distribution_redemptions'>;
 
 // Insert type exports
 export type RedemptionRequestInsert = InsertTables<'redemption_requests'>;
@@ -54,6 +57,8 @@ export type InvestorInsert = InsertTables<'investors'>;
 export type InvestorUpdate = UpdateTables<'investors'>;
 export type InvestorApprovalInsert = InsertTables<'investor_approvals'>;
 export type InvestorApprovalUpdate = UpdateTables<'investor_approvals'>;
+export type IssuerDetailDocumentInsert = InsertTables<'issuer_detail_documents'>;
+export type IssuerDetailDocumentUpdate = UpdateTables<'issuer_detail_documents'>;
 
 // Template types for reuse in TokenTemplate related files
 export type TokenTemplateInsert = InsertTables<'token_templates'>;
@@ -252,3 +257,12 @@ export interface FileObject {
   last_accessed_at: string;
   metadata: Record<string, any>;
 }
+
+// Distribution type definitions
+export type DistributionRow = Database['public']['Tables']['distributions']['Row'];
+export type DistributionInsert = Database['public']['Tables']['distributions']['Insert'];
+export type DistributionUpdate = Database['public']['Tables']['distributions']['Update'];
+
+export type DistributionRedemptionRow = Database['public']['Tables']['distribution_redemptions']['Row'];
+export type DistributionRedemptionInsert = Database['public']['Tables']['distribution_redemptions']['Insert'];
+export type DistributionRedemptionUpdate = Database['public']['Tables']['distribution_redemptions']['Update'];

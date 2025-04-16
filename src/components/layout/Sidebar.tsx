@@ -131,13 +131,29 @@ const Sidebar = () => {
   return (
     <div className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-background">
       <div className="flex h-full flex-col">
-        <div className="p-4">
+        <div className="p-6">
           <h2 className="text-xl font-bold">Chain Capital</h2>
           <p className="text-xs text-muted-foreground">Tokenization Platform</p>
         </div>
-
-        <ScrollArea className="flex-1 px-4">
+        <ScrollArea className="flex-1 px-4">       
           <div className="space-y-6">
+          <div>
+              <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground">
+                ONBOARDING
+              </h3>
+              <div className="space-y-1">
+              <SidebarItem
+                  icon={<UserRoundPlus className="h-4 w-4" />}
+                  label="Investor Onboarding"
+                  href="/compliance/investor-onboarding/registration"
+                />
+                <SidebarItem
+                  icon={<Landmark className="h-4 w-4" />}
+                  label="Issuer Onboarding"
+                  href="/compliance/issuer/onboarding/registration"
+                />
+              </div>
+            </div>
             <div>
               <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground">
                 OVERVIEW
@@ -155,7 +171,6 @@ const Sidebar = () => {
                 />
               </div>
             </div>
-
             <div>
               <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground">
                 ISSUANCE
@@ -210,16 +225,6 @@ const Sidebar = () => {
                   icon={<LayoutDashboard className="h-4 w-4" />}
                   label="Compliance Dashboard"
                   href="/compliance/operations/dashboard"
-                />
-                <SidebarItem
-                  icon={<UserRoundPlus className="h-4 w-4" />}
-                  label="Investor Onboarding"
-                  href="/compliance/investor-onboarding/registration"
-                />
-                <SidebarItem
-                  icon={<Landmark className="h-4 w-4" />}
-                  label="Issuer Onboarding"
-                  href="/compliance/issuer/onboarding/registration"
                 />
                 <SidebarItem
                   icon={<Wallet className="h-4 w-4" />}

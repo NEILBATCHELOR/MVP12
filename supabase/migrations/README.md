@@ -66,3 +66,74 @@ SELECT * FROM roles;
 -- Test the check_permission function
 SELECT check_permission('super_admin', 'system', 'view_audit_logs');
 ```
+
+# Database Migrations
+
+This directory contains SQL migrations for the Supabase database.
+
+## Recent Migrations
+
+### Token Distributions System
+
+Migrations `20231201000006`, `20231201000007`, and `20231201000008` implement a comprehensive token distribution tracking system:
+
+1. **Distributions Table** (`20231201000006_create_distributions_table.sql`)
+   - Records confirmed token distributions with blockchain transaction data
+   - Links to token_allocations, investors, subscriptions, and projects
+   - Stores blockchain details like transaction hash, wallet information, and token details
+
+2. **Distribution Trigger** (`20231201000007_create_distribution_trigger.sql`)
+   - Automatically populates the distributions table when a token_allocation is marked as distributed
+   - Links with transaction_proposals to gather blockchain details
+   - Creates a complete distribution record with all necessary information
+
+3. **Distribution-Redemption Relationship** (`20231201000008_create_distribution_redemption_relationship.sql`)
+   - Creates a junction table to link distributions to redemption_requests
+   - Tracks how much of each distribution has been redeemed
+   - Maintains a remaining_amount on distributions to track available tokens
+   - Updates distribution status when fully redeemed
+
+### Bug Fixes and Enhancements
+
+Migrations `20231201000009` to `20231201000011` address issues with token distribution functionality:
+
+1. **Token Allocations Permissions** (`20231201000009_fix_token_allocations_permissions.sql`)
+   - Ensures proper RLS (Row-Level Security) policies for token_allocations table
+   - Fixes permission issues that could cause 404 errors when updating token allocations
+   - Adds policies for distributions table
+
+2. **Transaction Signatures Table** (`20231201000010_create_transaction_signatures_table.sql`)
+   - Creates the transaction_signatures table if it doesn't exist
+   - Supports proper linking between transactions and their signatures
+   - Enables the distribution trigger to find transaction details
+
+3. **Updated Distribution Trigger** (`20231201000011_update_distribution_trigger.sql`)
+   - Updates the trigger function to correctly find transaction details
+   - Includes transaction_signatures integration
+   - Handles missing data more robustly
+
+### Purpose
+
+This system provides complete tracking of token distributions from allocation through distribution and redemption. It allows:
+
+- Confirmation that tokens were actually distributed on the blockchain
+- Tracking which distributed tokens are available for redemption
+- Maintaining an audit trail of token distribution and redemption
+- Supporting redemption workflows with accurate token availability information
+
+### Usage
+
+The system is designed to work automatically once a token_allocation is marked as distributed:
+
+1. Update a token_allocation record setting `distributed = true`
+2. The trigger automatically creates a corresponding distribution record
+3. When creating redemption requests, use the distributions table to find available tokens
+4. Link redemptions to specific distributions using the distribution_redemptions table
+
+### Related Types
+
+The TypeScript type definitions for these tables are available in:
+- `src/types/database.ts` - Database types
+- `src/types/centralModels.ts` - Domain model types
+- `src/utils/typeMappers.ts` - Conversion functions
+- `src/utils/typeGuards.ts` - Type validation

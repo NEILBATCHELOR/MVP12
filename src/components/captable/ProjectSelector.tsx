@@ -30,29 +30,76 @@ const ProjectSelector = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchProjects();
+    const fetchProjectsWithTimeout = async () => {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), 10000);
+      });
+      
+      try {
+        const result = await Promise.race([
+          fetchProjects(),
+          timeoutPromise
+        ]);
+        return result;
+      } catch (error) {
+        console.error("Fetch projects timeout:", error);
+        toast({
+          title: "Connection Timeout",
+          description: "The server took too long to respond. Please try again.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+      }
+    };
+    
+    fetchProjectsWithTimeout();
   }, []);
 
   useEffect(() => {
-    setSelectedProjectId(currentProjectId);
+    // Only update if the currentProjectId is valid
+    if (currentProjectId && currentProjectId !== "undefined") {
+      setSelectedProjectId(currentProjectId);
+    }
   }, [currentProjectId]);
 
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
+      // Fetch all projects, but order by is_primary (so primary projects are first)
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name")
+        .select("id, name, is_primary")
+        .order("is_primary", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
       setProjects(data || []);
 
-      // If no project is selected and we have projects, select the first one
-      if (!selectedProjectId && data && data.length > 0) {
-        setSelectedProjectId(data[0].id);
+      // If no valid project is selected, prioritize primary project
+      const isValidProjectId = selectedProjectId && selectedProjectId !== "undefined";
+      if ((!isValidProjectId) && data && data.length > 0) {
+        // Look for a primary project
+        const primaryProject = data.find(project => project.is_primary === true);
+        
+        // If primary project exists, select it; otherwise, select the first project
+        if (primaryProject) {
+          console.log(`Found primary project: ${primaryProject.name} (${primaryProject.id})`);
+          setSelectedProjectId(primaryProject.id);
+          // If there's an onProjectChange callback, trigger it with the primary project
+          if (onProjectChange) {
+            onProjectChange(primaryProject.id);
+          }
+        } else if (data.length > 0) {
+          console.log(`No primary project found, selecting first project: ${data[0].name} (${data[0].id})`);
+          setSelectedProjectId(data[0].id);
+          // If there's an onProjectChange callback, trigger it with the first project
+          if (onProjectChange) {
+            onProjectChange(data[0].id);
+          }
+        }
       }
+      return data;
     } catch (err) {
       console.error("Error fetching projects:", err);
       toast({
@@ -60,6 +107,7 @@ const ProjectSelector = ({
         description: "Failed to load projects. Please try again.",
         variant: "destructive",
       });
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +126,10 @@ const ProjectSelector = ({
     }
   };
 
+  const handleRefreshProjects = () => {
+    fetchProjects();
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
@@ -94,6 +146,10 @@ const ProjectSelector = ({
         <Button size="sm" onClick={() => navigate("/projects")}>
           Create Project
         </Button>
+        <Button size="sm" variant="outline" onClick={handleRefreshProjects}>
+          <Loader2 className="h-3 w-3 mr-1" />
+          Retry
+        </Button>
       </div>
     );
   }
@@ -107,7 +163,7 @@ const ProjectSelector = ({
         <SelectContent>
           {projects.map((project) => (
             <SelectItem key={project.id} value={project.id}>
-              {project.name}
+              {project.name} {project.is_primary && "(Primary)"}
             </SelectItem>
           ))}
         </SelectContent>

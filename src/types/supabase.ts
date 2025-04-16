@@ -449,6 +449,153 @@ export type Database = {
         }
         Relationships: []
       }
+      distribution_redemptions: {
+        Row: {
+          amount_redeemed: number
+          created_at: string
+          distribution_id: string
+          id: string
+          redemption_request_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount_redeemed: number
+          created_at?: string
+          distribution_id: string
+          id?: string
+          redemption_request_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount_redeemed?: number
+          created_at?: string
+          distribution_id?: string
+          id?: string
+          redemption_request_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distribution_redemptions_distribution_fkey"
+            columns: ["distribution_id"]
+            isOneToOne: false
+            referencedRelation: "distributions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distribution_redemptions_redemption_fkey"
+            columns: ["redemption_request_id"]
+            isOneToOne: false
+            referencedRelation: "redemption_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      distributions: {
+        Row: {
+          blockchain: string
+          created_at: string
+          distribution_date: string
+          distribution_tx_hash: string
+          fully_redeemed: boolean
+          id: string
+          investor_id: string
+          notes: string | null
+          project_id: string | null
+          remaining_amount: number
+          status: string
+          subscription_id: string
+          to_address: string
+          token_address: string | null
+          token_allocation_id: string
+          token_amount: number
+          token_symbol: string | null
+          token_type: string
+          updated_at: string | null
+          wallet_id: string | null
+        }
+        Insert: {
+          blockchain: string
+          created_at?: string
+          distribution_date: string
+          distribution_tx_hash: string
+          fully_redeemed?: boolean
+          id?: string
+          investor_id: string
+          notes?: string | null
+          project_id?: string | null
+          remaining_amount: number
+          status?: string
+          subscription_id: string
+          to_address: string
+          token_address?: string | null
+          token_allocation_id: string
+          token_amount: number
+          token_symbol?: string | null
+          token_type: string
+          updated_at?: string | null
+          wallet_id?: string | null
+        }
+        Update: {
+          blockchain?: string
+          created_at?: string
+          distribution_date?: string
+          distribution_tx_hash?: string
+          fully_redeemed?: boolean
+          id?: string
+          investor_id?: string
+          notes?: string | null
+          project_id?: string | null
+          remaining_amount?: number
+          status?: string
+          subscription_id?: string
+          to_address?: string
+          token_address?: string | null
+          token_allocation_id?: string
+          token_amount?: number
+          token_symbol?: string | null
+          token_type?: string
+          updated_at?: string | null
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distributions_investor_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "investors"
+            referencedColumns: ["investor_id"]
+          },
+          {
+            foreignKeyName: "distributions_project_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distributions_subscription_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distributions_token_allocation_fkey"
+            columns: ["token_allocation_id"]
+            isOneToOne: false
+            referencedRelation: "token_allocations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distributions_wallet_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "multi_sig_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_approvals: {
         Row: {
           approver_id: string | null
@@ -1034,6 +1181,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      issuer_detail_documents: {
+        Row: {
+          document_name: string
+          document_type: string
+          document_url: string
+          id: string
+          metadata: Json | null
+          project_id: string
+          status: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          document_name: string
+          document_type: string
+          document_url: string
+          id?: string
+          metadata?: Json | null
+          project_id: string
+          status?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          document_name?: string
+          document_type?: string
+          document_url?: string
+          id?: string
+          metadata?: Json | null
+          project_id?: string
+          status?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issuer_detail_documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       issuer_documents: {
         Row: {
@@ -1625,6 +1819,7 @@ export type Database = {
           description: string | null
           funding_round: string | null
           id: string
+          is_primary: boolean | null
           jurisdiction: string | null
           legal_entity: string | null
           name: string
@@ -1643,6 +1838,7 @@ export type Database = {
           description?: string | null
           funding_round?: string | null
           id?: string
+          is_primary?: boolean | null
           jurisdiction?: string | null
           legal_entity?: string | null
           name: string
@@ -1661,6 +1857,7 @@ export type Database = {
           description?: string | null
           funding_round?: string | null
           id?: string
+          is_primary?: boolean | null
           jurisdiction?: string | null
           legal_entity?: string | null
           name?: string
@@ -2627,6 +2824,44 @@ export type Database = {
           },
         ]
       }
+      transaction_signatures: {
+        Row: {
+          created_at: string
+          id: string
+          proposal_id: string
+          signature: string
+          signer: string
+          transaction_hash: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          proposal_id: string
+          signature: string
+          signer: string
+          transaction_hash?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          proposal_id?: string
+          signature?: string
+          signer?: string
+          transaction_hash?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_signatures_proposal_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "transaction_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_mfa_settings: {
         Row: {
           backup_codes: Json | null
@@ -3168,6 +3403,17 @@ export type Database = {
         | "organizational_chart"
         | "key_people_cv"
         | "aml_kyc_description"
+      issuer_document_type:
+        | "issuer_creditworthiness"
+        | "project_security_type"
+        | "offering_details"
+        | "term_sheet"
+        | "special_rights"
+        | "underwriters"
+        | "use_of_proceeds"
+        | "financial_highlights"
+        | "timing"
+        | "risk_factors"
       issuer_role: "admin" | "editor" | "viewer" | "compliance_officer"
       kyc_status: "approved" | "pending" | "failed" | "not_started" | "expired"
       workflow_status: "pending" | "completed" | "rejected"
@@ -3301,6 +3547,18 @@ export const Constants = {
         "organizational_chart",
         "key_people_cv",
         "aml_kyc_description",
+      ],
+      issuer_document_type: [
+        "issuer_creditworthiness",
+        "project_security_type",
+        "offering_details",
+        "term_sheet",
+        "special_rights",
+        "underwriters",
+        "use_of_proceeds",
+        "financial_highlights",
+        "timing",
+        "risk_factors",
       ],
       issuer_role: ["admin", "editor", "viewer", "compliance_officer"],
       kyc_status: ["approved", "pending", "failed", "not_started", "expired"],

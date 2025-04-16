@@ -1,0 +1,206 @@
+{
+  "React.HTMLAttributes<HTMLDivElement>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/Spinner.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/badge.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/notification.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/skeleton.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/spinner.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/redemption/notifications/Notification.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/wallet/components/WalletRiskIndicator.tsx"
+  ],
+  "UsePermissionsReturn": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/hooks/usePermissions.tsx"
+  ],
+  "PolicyRule": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/hooks/useRuleManagement.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/rules/PolicyCreationModal.tsx"
+  ],
+  "Subscription": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/subscriptions.ts"
+  ],
+  "BasePolicy": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/enhancedPolicyService.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/policy.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/policy.ts"
+  ],
+  "Omit<PolicyRuleApproverTable, 'policy_rule_id'>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/policyApproverService.ts"
+  ],
+  "BaseModel": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts"
+  ],
+  "Investor": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/models.ts"
+  ],
+  "Transaction": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/centralModels.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/TransactionBuilder.ts"
+  ],
+  "Partial<OrganizationTable>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/database.ts"
+  ],
+  "Partial<InvestorTable>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/database.ts"
+  ],
+  "Omit<PolicyTemplateTable, 'template_data'>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/types/policyTemplates.ts"
+  ],
+  "ButtonProps": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/auth/LoginButton.tsx"
+  ],
+  "TokenAllocation": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/captable/TokenAllocationTable.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/captable/types.ts"
+  ],
+  "CentralApprover": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/rules/ApprovalDashboard.tsx"
+  ],
+  "TokenData": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/tokens/TokenDetail.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/tokens/TokenList.tsx"
+  ],
+  "VariantProps<typeof badgeVariants>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/badge.tsx"
+  ],
+  "React.ButtonHTMLAttributes<HTMLButtonElement>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/button.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/notification.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/redemption/notifications/Notification.tsx"
+  ],
+  "VariantProps<typeof buttonVariants>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/button.tsx"
+  ],
+  "VariantProps<typeof notificationVariants>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/notification.tsx",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/redemption/notifications/Notification.tsx"
+  ],
+  "React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/sheet.tsx"
+  ],
+  "VariantProps<typeof sheetVariants>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/sheet.tsx"
+  ],
+  "React.TextareaHTMLAttributes<HTMLTextAreaElement>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/ui/textarea.tsx"
+  ],
+  "WalletAddress": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/hooks/useWallet.ts"
+  ],
+  "Omit<Partial<TokenData>, 'standard'>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/services/tokenService.ts"
+  ],
+  "WalletGenerator": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/BTCWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/ETHWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/XRPWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/AptosWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/NEARWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/PolygonWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/SolanaWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/StellarWalletGenerator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/generators/SuiWalletGenerator.ts"
+  ],
+  "OneInchQuoteResponse": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/SwapService.ts"
+  ],
+  "ZeroXQuoteResponse": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/services/wallet/SwapService.ts"
+  ],
+  "VariantProps<typeof riskIndicatorVariants>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/wallet/components/WalletRiskIndicator.tsx"
+  ],
+  "BlockchainAdapter": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/AptosAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/BitcoinAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/EVMAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/NEARAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/RippleAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/SolanaAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/StellarAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/adapters/SuiAdapter.ts"
+  ],
+  "FeeEstimator": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/fees/BitcoinFeeEstimator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/fees/FeeEstimator.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/fees/SolanaFeeEstimator.ts"
+  ],
+  "EventEmitter": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/notifications/TransactionNotifier.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/notifications/WebSocketNotifier.ts"
+  ],
+  "Token": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC1155TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC1400TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC3525TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC4626TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC721TokenAdapter.ts"
+  ],
+  "BaseTokenAdapter": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC1155TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC1400TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC3525TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC4626TokenAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/ERC721TokenAdapter.ts"
+  ],
+  "TokenAdapter": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/TokenAdapter.ts"
+  ],
+  "ITokenAdapterFactory": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/tokens/TokenAdapterFactory.ts"
+  ],
+  "BaseTransactionBuilder": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/EthereumTransactionBuilder.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/NEARTransactionBuilder.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/RippleTransactionBuilder.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/SolanaTransactionBuilder.ts"
+  ],
+  "MessageSigner": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/MessageSigner.ts"
+  ],
+  "TransactionBuilder": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/TransactionBuilder.ts"
+  ],
+  "TransactionListener": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/TransactionMonitor.ts"
+  ],
+  "Error": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/restrictions/types.ts"
+  ],
+  "TransactionHandler": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/handlers/BitcoinTransactionHandler.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/handlers/EVMTransactionHandler.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/lib/web3/transactions/handlers/SolanaTransactionHandler.ts"
+  ],
+  "UploadOptions": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/documents/services/batchUploadService.ts"
+  ],
+  "Omit<OnfidoSDKOptions, 'workflowRunId'>": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/components/WorkflowVerification.tsx"
+  ],
+  "IdentityProviderFactory": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/services/identityServiceFactory.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/services/identityServiceFactory.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/services/identityServiceFactory.ts"
+  ],
+  "VerificationProvider": [
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/services/verificationProviderAdapter.ts",
+    "/Users/neilbatchelor/Cursor/1 copy/src/components/compliance/operations/kyc/services/verificationProviderAdapter.ts"
+  ]
+}

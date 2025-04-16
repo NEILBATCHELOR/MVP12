@@ -205,7 +205,7 @@ export const DocumentReview: React.FC<DocumentReviewProps> = ({
         </CardFooter>
       )}
 
-      <Dialog open={rejectDialogOpen} onClose={handleRejectDialogClose}>
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Reject Document</DialogTitle>

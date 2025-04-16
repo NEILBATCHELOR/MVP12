@@ -193,12 +193,19 @@ const ProjectsList: React.FC<ProjectsListProps> = ({
     try {
       setIsProcessing(true);
 
+      // Process numeric fields - convert empty strings to null
+      const processedData = {
+        ...projectData,
+        target_raise: projectData.target_raise === "" ? null : projectData.target_raise,
+        authorized_shares: projectData.authorized_shares === "" ? null : projectData.authorized_shares,
+        share_price: projectData.share_price === "" ? null : projectData.share_price,
+        company_valuation: projectData.company_valuation === "" ? null : projectData.company_valuation,
+        updated_at: new Date().toISOString(),
+      };
+
       const { data, error } = await supabase
         .from("projects")
-        .update({
-          ...projectData,
-          updated_at: new Date().toISOString(),
-        })
+        .update(processedData)
         .eq("id", currentProject.id)
         .select()
         .single();

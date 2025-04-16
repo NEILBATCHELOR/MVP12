@@ -7,6 +7,11 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@radix-ui/react-icons"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
+// Define proper types for the icon components
+type IconProps = {
+  className?: string
+}
+
 function Calendar({
   className,
   classNames,
@@ -58,11 +63,11 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeftIcon className={cn("h-4 w-4", className)} {...props} />
+        IconLeft: ({ className }: IconProps) => (
+          <ChevronLeftIcon className={cn("h-4 w-4", className)} />
         ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRightIcon className={cn("h-4 w-4", className)} {...props} />
+        IconRight: ({ className }: IconProps) => (
+          <ChevronRightIcon className={cn("h-4 w-4", className)} />
         ),
       }}
       {...props}

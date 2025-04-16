@@ -10,6 +10,8 @@ import type {
   Investor, 
   Organization, 
   InvestorApproval,
+  Distribution,
+  DistributionRedemption
 } from '@/types/centralModels';
 
 import {
@@ -144,3 +146,49 @@ export const areOrganizations = (arr: any[]): arr is Organization[] => {
 export const areInvestorApprovals = (arr: any[]): arr is InvestorApproval[] => {
   return arr.every(isInvestorApproval);
 };
+
+/**
+ * Type guard to check if a value is a Distribution
+ * @param value The value to check
+ * @returns Whether the value is a Distribution
+ */
+export function isDistribution(value: unknown): value is Distribution {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.tokenAllocationId === 'string' &&
+    typeof obj.investorId === 'string' &&
+    typeof obj.subscriptionId === 'string' &&
+    typeof obj.tokenType === 'string' &&
+    typeof obj.tokenAmount === 'number' &&
+    typeof obj.distributionDate === 'string' &&
+    typeof obj.distributionTxHash === 'string' &&
+    typeof obj.toAddress === 'string' &&
+    typeof obj.blockchain === 'string' &&
+    typeof obj.remainingAmount === 'number' &&
+    typeof obj.fullyRedeemed === 'boolean' &&
+    typeof obj.createdAt === 'string'
+  );
+}
+
+/**
+ * Type guard to check if a value is a DistributionRedemption
+ * @param value The value to check
+ * @returns Whether the value is a DistributionRedemption
+ */
+export function isDistributionRedemption(value: unknown): value is DistributionRedemption {
+  if (!value || typeof value !== 'object') return false;
+  
+  const obj = value as Record<string, unknown>;
+  
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.distributionId === 'string' &&
+    typeof obj.redemptionRequestId === 'string' &&
+    typeof obj.amountRedeemed === 'number' &&
+    typeof obj.createdAt === 'string'
+  );
+}

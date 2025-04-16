@@ -7,10 +7,14 @@
  */
 
 import type {
-  Investor,
   Organization,
   InvestorApproval,
-  BaseModel
+  BaseModel,
+  User,
+  Project,
+  Investor,
+  Distribution,
+  DistributionRedemption
 } from '@/types/centralModels';
 
 import type {
@@ -207,7 +211,8 @@ export const mapDbProjectToProject = (dbProject: any): any => {
     legalEntity: dbProject.legal_entity || "",
     authorizedShares: dbProject.authorized_shares || 0,
     createdAt: dbProject.created_at || null,
-    investorCount: dbProject.investor_count || 0
+    investorCount: dbProject.investor_count || 0,
+    isPrimary: dbProject.is_primary || false
   };
 };
 
@@ -277,3 +282,99 @@ export const mapDbRedemptionToRedemptionRequest = (dbRedemption: any): any => {
     createdAt: dbRedemption.created_at || new Date().toISOString()
   };
 };
+
+/**
+ * Maps database distribution to application model
+ * @param dbDistribution - Database distribution object
+ * @returns Distribution model
+ */
+export function mapDistributionToCamelCase(dbDistribution: any): Distribution {
+  return {
+    id: dbDistribution.id,
+    tokenAllocationId: dbDistribution.token_allocation_id,
+    investorId: dbDistribution.investor_id,
+    subscriptionId: dbDistribution.subscription_id,
+    projectId: dbDistribution.project_id,
+    tokenType: dbDistribution.token_type,
+    tokenAmount: dbDistribution.token_amount,
+    distributionDate: dbDistribution.distribution_date,
+    distributionTxHash: dbDistribution.distribution_tx_hash,
+    walletId: dbDistribution.wallet_id,
+    blockchain: dbDistribution.blockchain,
+    tokenAddress: dbDistribution.token_address,
+    tokenSymbol: dbDistribution.token_symbol,
+    toAddress: dbDistribution.to_address,
+    walletAddress: dbDistribution.to_address,
+    status: dbDistribution.status,
+    notes: dbDistribution.notes,
+    remainingAmount: dbDistribution.remaining_amount,
+    fullyRedeemed: dbDistribution.fully_redeemed,
+    createdAt: dbDistribution.created_at,
+    updatedAt: dbDistribution.updated_at,
+  };
+}
+
+/**
+ * Maps application distribution model to database format
+ * @param distribution - Distribution model
+ * @returns Database distribution object
+ */
+export function mapDistributionToSnakeCase(distribution: Distribution): any {
+  // Destructure out the walletAddress field since it's redundant with toAddress
+  const { walletAddress, ...distributionData } = distribution;
+  
+  return {
+    id: distributionData.id,
+    token_allocation_id: distributionData.tokenAllocationId,
+    investor_id: distributionData.investorId,
+    subscription_id: distributionData.subscriptionId,
+    project_id: distributionData.projectId,
+    token_type: distributionData.tokenType,
+    token_amount: distributionData.tokenAmount,
+    distribution_date: distributionData.distributionDate,
+    distribution_tx_hash: distributionData.distributionTxHash,
+    wallet_id: distributionData.walletId,
+    blockchain: distributionData.blockchain,
+    token_address: distributionData.tokenAddress,
+    token_symbol: distributionData.tokenSymbol,
+    to_address: distributionData.toAddress,
+    status: distributionData.status,
+    notes: distributionData.notes,
+    remaining_amount: distributionData.remainingAmount,
+    fully_redeemed: distributionData.fullyRedeemed,
+    created_at: distributionData.createdAt,
+    updated_at: distributionData.updatedAt,
+  };
+}
+
+/**
+ * Maps database distribution redemption to application model
+ * @param dbDistributionRedemption - Database distribution redemption object
+ * @returns DistributionRedemption model
+ */
+export function mapDistributionRedemptionToCamelCase(dbDistributionRedemption: any): DistributionRedemption {
+  return {
+    id: dbDistributionRedemption.id,
+    distributionId: dbDistributionRedemption.distribution_id,
+    redemptionRequestId: dbDistributionRedemption.redemption_request_id,
+    amountRedeemed: dbDistributionRedemption.amount_redeemed,
+    createdAt: dbDistributionRedemption.created_at,
+    updatedAt: dbDistributionRedemption.updated_at,
+  };
+}
+
+/**
+ * Maps application distribution redemption model to database format
+ * @param distributionRedemption - DistributionRedemption model
+ * @returns Database distribution redemption object
+ */
+export function mapDistributionRedemptionToSnakeCase(distributionRedemption: DistributionRedemption): any {
+  return {
+    id: distributionRedemption.id,
+    distribution_id: distributionRedemption.distributionId,
+    redemption_request_id: distributionRedemption.redemptionRequestId,
+    amount_redeemed: distributionRedemption.amountRedeemed,
+    created_at: distributionRedemption.createdAt,
+    updated_at: distributionRedemption.updatedAt,
+  };
+}

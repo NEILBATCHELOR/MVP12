@@ -119,6 +119,23 @@ CREATE TYPE "public"."document_type" AS ENUM (
 ALTER TYPE "public"."document_type" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."issuer_document_type" AS ENUM (
+    'issuer_creditworthiness',
+    'project_security_type',
+    'offering_details',
+    'term_sheet',
+    'special_rights',
+    'underwriters',
+    'use_of_proceeds',
+    'financial_highlights',
+    'timing',
+    'risk_factors'
+);
+
+
+ALTER TYPE "public"."issuer_document_type" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."issuer_role" AS ENUM (
     'admin',
     'editor',
@@ -1009,6 +1026,70 @@ $$;
 ALTER FUNCTION "public"."handle_rule_rejection"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."handle_token_distribution"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+  tx_proposal transaction_proposals%ROWTYPE;
+BEGIN
+  -- Only process when distributed is changed from false to true
+  IF (OLD.distributed = false AND NEW.distributed = true) THEN
+    -- Find the transaction proposal using distribution_tx_hash if it exists
+    IF NEW.distribution_tx_hash IS NOT NULL THEN
+      SELECT * INTO tx_proposal 
+      FROM transaction_proposals 
+      WHERE id::text = NEW.distribution_tx_hash 
+         OR id IN (
+           SELECT proposal_id FROM transaction_signatures 
+           WHERE transaction_hash = NEW.distribution_tx_hash
+         )
+      LIMIT 1;
+    END IF;
+    
+    -- Insert record into distributions table
+    INSERT INTO distributions (
+      token_allocation_id,
+      investor_id,
+      subscription_id,
+      project_id,
+      token_type,
+      token_amount,
+      distribution_date,
+      distribution_tx_hash,
+      wallet_id,
+      blockchain,
+      token_address,
+      token_symbol,
+      to_address,
+      notes,
+      remaining_amount
+    ) VALUES (
+      NEW.id,
+      NEW.investor_id,
+      NEW.subscription_id,
+      NEW.project_id,
+      NEW.token_type,
+      NEW.token_amount,
+      COALESCE(NEW.distribution_date, now()),
+      COALESCE(NEW.distribution_tx_hash, ''),
+      tx_proposal.wallet_id,
+      COALESCE(tx_proposal.blockchain, 'ethereum'),
+      tx_proposal.token_address,
+      tx_proposal.token_symbol,
+      COALESCE(tx_proposal.to_address, ''),
+      NEW.notes,
+      NEW.token_amount
+    );
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_token_distribution"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_user_deletion"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -1375,6 +1456,26 @@ $$;
 
 
 ALTER FUNCTION "public"."update_consensus_settings_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_distribution_remaining_amount"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  -- Update the remaining amount in the distribution
+  UPDATE distributions
+  SET 
+    remaining_amount = remaining_amount - NEW.amount_redeemed,
+    fully_redeemed = CASE WHEN (remaining_amount - NEW.amount_redeemed) <= 0 THEN true ELSE false END,
+    updated_at = now()
+  WHERE id = NEW.distribution_id;
+  
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_distribution_remaining_amount"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_modified_column"() RETURNS "trigger"
@@ -2136,6 +2237,57 @@ CREATE TABLE IF NOT EXISTS "public"."consensus_settings" (
 ALTER TABLE "public"."consensus_settings" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."distribution_redemptions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "distribution_id" "uuid" NOT NULL,
+    "redemption_request_id" "uuid" NOT NULL,
+    "amount_redeemed" numeric NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "distribution_redemptions_amount_check" CHECK (("amount_redeemed" > (0)::numeric))
+);
+
+
+ALTER TABLE "public"."distribution_redemptions" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."distribution_redemptions" IS 'Tracks which distributions have been included in redemption requests';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."distributions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "token_allocation_id" "uuid" NOT NULL,
+    "investor_id" "uuid" NOT NULL,
+    "subscription_id" "uuid" NOT NULL,
+    "project_id" "uuid",
+    "token_type" "text" NOT NULL,
+    "token_amount" numeric NOT NULL,
+    "distribution_date" timestamp with time zone NOT NULL,
+    "distribution_tx_hash" "text" NOT NULL,
+    "wallet_id" "uuid",
+    "blockchain" "text" NOT NULL,
+    "token_address" "text",
+    "token_symbol" "text",
+    "to_address" "text" NOT NULL,
+    "status" "text" DEFAULT 'confirmed'::"text" NOT NULL,
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "remaining_amount" numeric NOT NULL,
+    "fully_redeemed" boolean DEFAULT false NOT NULL,
+    CONSTRAINT "distributions_remaining_amount_check" CHECK (("remaining_amount" >= (0)::numeric)),
+    CONSTRAINT "distributions_token_amount_check" CHECK (("token_amount" > (0)::numeric))
+);
+
+
+ALTER TABLE "public"."distributions" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."distributions" IS 'Records of confirmed token distributions with blockchain transaction data';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."document_approvals" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "document_id" "uuid",
@@ -2378,6 +2530,31 @@ CREATE TABLE IF NOT EXISTS "public"."issuer_access_roles" (
 
 
 ALTER TABLE "public"."issuer_access_roles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."issuer_detail_documents" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "project_id" "uuid" NOT NULL,
+    "document_type" "text" NOT NULL,
+    "document_url" "text" NOT NULL,
+    "document_name" "text" NOT NULL,
+    "uploaded_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "uploaded_by" "uuid",
+    "status" "text" DEFAULT 'active'::"text",
+    "metadata" "jsonb"
+);
+
+
+ALTER TABLE "public"."issuer_detail_documents" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."issuer_detail_documents" IS 'Documents related to issuer details for projects including legal and regulatory compliance';
+
+
+
+COMMENT ON COLUMN "public"."issuer_detail_documents"."document_type" IS 'Type of issuer document (creditworthiness, term_sheet, legal_regulatory_compliance, etc.)';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."issuer_documents" (
@@ -2644,7 +2821,8 @@ CREATE TABLE IF NOT EXISTS "public"."projects" (
     "legal_entity" "text",
     "jurisdiction" "text",
     "tax_id" "text",
-    "status" "text" DEFAULT 'active'::"text"
+    "status" "text" DEFAULT 'active'::"text",
+    "is_primary" boolean DEFAULT false
 );
 
 
@@ -3027,6 +3205,24 @@ CREATE TABLE IF NOT EXISTS "public"."transaction_proposals" (
 ALTER TABLE "public"."transaction_proposals" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."transaction_signatures" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "proposal_id" "uuid" NOT NULL,
+    "transaction_hash" "text",
+    "signer" "uuid" NOT NULL,
+    "signature" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."transaction_signatures" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."transaction_signatures" IS 'Signatures for multi-signature transactions';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."user_mfa_settings" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -3397,6 +3593,21 @@ ALTER TABLE ONLY "public"."consensus_settings"
 
 
 
+ALTER TABLE ONLY "public"."distribution_redemptions"
+    ADD CONSTRAINT "distribution_redemptions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."distribution_redemptions"
+    ADD CONSTRAINT "distribution_redemptions_unique" UNIQUE ("distribution_id", "redemption_request_id");
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."document_approvals"
     ADD CONSTRAINT "document_approvals_pkey" PRIMARY KEY ("id");
 
@@ -3469,6 +3680,11 @@ ALTER TABLE ONLY "public"."issuer_access_roles"
 
 ALTER TABLE ONLY "public"."issuer_access_roles"
     ADD CONSTRAINT "issuer_access_roles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."issuer_detail_documents"
+    ADD CONSTRAINT "issuer_detail_documents_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3654,6 +3870,11 @@ ALTER TABLE ONLY "public"."transaction_notifications"
 
 ALTER TABLE ONLY "public"."transaction_proposals"
     ADD CONSTRAINT "transaction_proposals_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."transaction_signatures"
+    ADD CONSTRAINT "transaction_signatures_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3912,6 +4133,18 @@ CREATE INDEX "idx_compliance_reports_status" ON "public"."compliance_reports" US
 
 
 
+CREATE INDEX "idx_distributions_distribution_date" ON "public"."distributions" USING "btree" ("distribution_date");
+
+
+
+CREATE INDEX "idx_distributions_investor_id" ON "public"."distributions" USING "btree" ("investor_id");
+
+
+
+CREATE INDEX "idx_distributions_token_allocation_id" ON "public"."distributions" USING "btree" ("token_allocation_id");
+
+
+
 CREATE INDEX "idx_document_approvals_document_id" ON "public"."document_approvals" USING "btree" ("document_id");
 
 
@@ -4044,6 +4277,10 @@ CREATE INDEX "idx_policy_templates_type" ON "public"."policy_templates" USING "b
 
 
 
+CREATE INDEX "idx_project_is_primary" ON "public"."projects" USING "btree" ("is_primary");
+
+
+
 CREATE INDEX "idx_redemption_rules_rule_id" ON "public"."redemption_rules" USING "btree" ("rule_id");
 
 
@@ -4156,6 +4393,14 @@ CREATE OR REPLACE TRIGGER "on_auth_user_created" AFTER INSERT ON "auth"."users" 
 
 
 
+CREATE OR REPLACE TRIGGER "after_distribution_redemption_insert" AFTER INSERT ON "public"."distribution_redemptions" FOR EACH ROW EXECUTE FUNCTION "public"."update_distribution_remaining_amount"();
+
+
+
+CREATE OR REPLACE TRIGGER "after_token_allocation_distributed" AFTER UPDATE ON "public"."token_allocations" FOR EACH ROW WHEN ((("old"."distributed" = false) AND ("new"."distributed" = true))) EXECUTE FUNCTION "public"."handle_token_distribution"();
+
+
+
 CREATE OR REPLACE TRIGGER "create_token_version_on_insert" AFTER INSERT ON "public"."tokens" FOR EACH ROW EXECUTE FUNCTION "public"."create_token_version"();
 
 
@@ -4173,6 +4418,14 @@ CREATE OR REPLACE TRIGGER "document_version_trigger" BEFORE UPDATE ON "public"."
 
 
 CREATE OR REPLACE TRIGGER "investor_approval_audit_trigger" AFTER UPDATE ON "public"."investor_approvals" FOR EACH ROW EXECUTE FUNCTION "public"."audit_investor_approval_changes"();
+
+
+
+CREATE OR REPLACE TRIGGER "log_distribution_changes" AFTER INSERT OR DELETE OR UPDATE ON "public"."distributions" FOR EACH ROW EXECUTE FUNCTION "public"."log_user_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "log_distribution_redemption_changes" AFTER INSERT OR DELETE OR UPDATE ON "public"."distribution_redemptions" FOR EACH ROW EXECUTE FUNCTION "public"."log_user_action"();
 
 
 
@@ -4392,6 +4645,41 @@ ALTER TABLE ONLY "public"."compliance_reports"
 
 
 
+ALTER TABLE ONLY "public"."distribution_redemptions"
+    ADD CONSTRAINT "distribution_redemptions_distribution_fkey" FOREIGN KEY ("distribution_id") REFERENCES "public"."distributions"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."distribution_redemptions"
+    ADD CONSTRAINT "distribution_redemptions_redemption_fkey" FOREIGN KEY ("redemption_request_id") REFERENCES "public"."redemption_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_investor_fkey" FOREIGN KEY ("investor_id") REFERENCES "public"."investors"("investor_id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_project_fkey" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_subscription_fkey" FOREIGN KEY ("subscription_id") REFERENCES "public"."subscriptions"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_token_allocation_fkey" FOREIGN KEY ("token_allocation_id") REFERENCES "public"."token_allocations"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."distributions"
+    ADD CONSTRAINT "distributions_wallet_fkey" FOREIGN KEY ("wallet_id") REFERENCES "public"."multi_sig_wallets"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."document_approvals"
     ADD CONSTRAINT "document_approvals_approver_id_fkey" FOREIGN KEY ("approver_id") REFERENCES "public"."users"("id");
 
@@ -4479,6 +4767,11 @@ ALTER TABLE ONLY "public"."issuer_access_roles"
 
 ALTER TABLE ONLY "public"."issuer_access_roles"
     ADD CONSTRAINT "issuer_access_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."issuer_detail_documents"
+    ADD CONSTRAINT "issuer_detail_documents_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE CASCADE;
 
 
 
@@ -4626,6 +4919,16 @@ ALTER TABLE ONLY "public"."transaction_proposals"
 
 
 
+ALTER TABLE ONLY "public"."transaction_signatures"
+    ADD CONSTRAINT "transaction_signatures_proposal_fkey" FOREIGN KEY ("proposal_id") REFERENCES "public"."transaction_proposals"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."transaction_signatures"
+    ADD CONSTRAINT "transaction_signatures_signer_fkey" FOREIGN KEY ("signer") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."user_mfa_settings"
     ADD CONSTRAINT "user_mfa_settings_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
@@ -4720,6 +5023,46 @@ CREATE POLICY "Admins can manage roles" ON "public"."issuer_access_roles" USING 
 
 
 
+CREATE POLICY "Allow distributions insert access" ON "public"."distributions" FOR INSERT WITH CHECK (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow distributions read access" ON "public"."distributions" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Allow distributions update access" ON "public"."distributions" FOR UPDATE USING (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow token_allocations delete access" ON "public"."token_allocations" FOR DELETE USING (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow token_allocations insert access" ON "public"."token_allocations" FOR INSERT WITH CHECK (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow token_allocations read access" ON "public"."token_allocations" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Allow token_allocations update access" ON "public"."token_allocations" FOR UPDATE USING (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow transaction_signatures insert access" ON "public"."transaction_signatures" FOR INSERT WITH CHECK (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Allow transaction_signatures read access" ON "public"."transaction_signatures" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Allow transaction_signatures update access" ON "public"."transaction_signatures" FOR UPDATE USING (("auth"."uid"() IS NOT NULL));
+
+
+
 CREATE POLICY "Compliance officers can create reports" ON "public"."compliance_reports" FOR INSERT WITH CHECK (("auth"."uid"() IN ( SELECT "issuer_access_roles"."user_id"
    FROM "public"."issuer_access_roles"
   WHERE (("issuer_access_roles"."issuer_id" = "compliance_reports"."issuer_id") AND ("issuer_access_roles"."role" = ANY (ARRAY['admin'::"public"."issuer_role", 'compliance_officer'::"public"."issuer_role"]))))));
@@ -4745,6 +5088,14 @@ CREATE POLICY "Enable read access for all users" ON "public"."onboarding_restric
 
 
 CREATE POLICY "Enable update for authenticated users only" ON "public"."onboarding_restrictions" FOR UPDATE USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Users can CRUD their own issuer documents" ON "public"."issuer_detail_documents" USING (true);
+
+
+
+CREATE POLICY "Users can CRUD their own projects" ON "public"."projects" USING (true);
 
 
 
@@ -4907,7 +5258,13 @@ CREATE POLICY "security_events_user_policy" ON "public"."security_events" FOR SE
 
 
 
+ALTER TABLE "public"."token_allocations" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."transaction_notifications" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."transaction_signatures" ENABLE ROW LEVEL SECURITY;
 
 
 GRANT USAGE ON SCHEMA "auth" TO "anon";
@@ -5093,6 +5450,12 @@ GRANT ALL ON FUNCTION "public"."handle_rule_rejection"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_token_distribution"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_token_distribution"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_token_distribution"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."handle_user_deletion"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_user_deletion"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_user_deletion"() TO "service_role";
@@ -5156,6 +5519,12 @@ GRANT ALL ON FUNCTION "public"."save_consensus_config"("p_consensus_type" "text"
 GRANT ALL ON FUNCTION "public"."update_consensus_settings_updated_at"() TO "anon";
 GRANT ALL ON FUNCTION "public"."update_consensus_settings_updated_at"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_consensus_settings_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_distribution_remaining_amount"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_distribution_remaining_amount"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_distribution_remaining_amount"() TO "service_role";
 
 
 
@@ -5392,6 +5761,18 @@ GRANT ALL ON TABLE "public"."consensus_settings" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."distribution_redemptions" TO "anon";
+GRANT ALL ON TABLE "public"."distribution_redemptions" TO "authenticated";
+GRANT ALL ON TABLE "public"."distribution_redemptions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."distributions" TO "anon";
+GRANT ALL ON TABLE "public"."distributions" TO "authenticated";
+GRANT ALL ON TABLE "public"."distributions" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."document_approvals" TO "anon";
 GRANT ALL ON TABLE "public"."document_approvals" TO "authenticated";
 GRANT ALL ON TABLE "public"."document_approvals" TO "service_role";
@@ -5461,6 +5842,12 @@ GRANT ALL ON TABLE "public"."invoices" TO "service_role";
 GRANT ALL ON TABLE "public"."issuer_access_roles" TO "anon";
 GRANT ALL ON TABLE "public"."issuer_access_roles" TO "authenticated";
 GRANT ALL ON TABLE "public"."issuer_access_roles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."issuer_detail_documents" TO "anon";
+GRANT ALL ON TABLE "public"."issuer_detail_documents" TO "authenticated";
+GRANT ALL ON TABLE "public"."issuer_detail_documents" TO "service_role";
 
 
 
@@ -5677,6 +6064,12 @@ GRANT ALL ON TABLE "public"."transaction_notifications" TO "service_role";
 GRANT ALL ON TABLE "public"."transaction_proposals" TO "anon";
 GRANT ALL ON TABLE "public"."transaction_proposals" TO "authenticated";
 GRANT ALL ON TABLE "public"."transaction_proposals" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."transaction_signatures" TO "anon";
+GRANT ALL ON TABLE "public"."transaction_signatures" TO "authenticated";
+GRANT ALL ON TABLE "public"."transaction_signatures" TO "service_role";
 
 
 

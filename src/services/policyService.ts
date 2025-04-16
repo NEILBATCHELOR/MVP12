@@ -226,11 +226,16 @@ export async function getPolicy(policyId: string): Promise<Policy | null> {
   }
 
   // Get all rules with this policy ID
-  const { data: rulesData, error: rulesError } = await supabase
+  // @ts-ignore - Supabase typing causes excessive type instantiation
+  const rulesResponse = await supabase
     .from('rules')
     .select('*')
     .eq('rule_details->policyId', policyId)
     .neq('rule_type', 'policy_metadata');
+
+  // Manually handle response to avoid type recursion issues
+  const rulesData = rulesResponse.data as Array<Record<string, any>> | null;
+  const rulesError = rulesResponse.error as Error | null;
 
   if (rulesError) {
     console.error(`Error fetching rules for policy ${policyId}:`, rulesError);

@@ -163,11 +163,17 @@ const TokenAdministration: React.FC<TokenAdministrationProps> = ({
     details: any;
   } | null>(null);
 
-  // Fetch tokens and project details when component mounts
+  // Fetch data when the project changes
   useEffect(() => {
-    if (currentProjectId) {
+    if (!currentProjectId) {
+      // If no project ID is provided, fetch the primary project
+      fetchPrimaryProject();
+    } else if (currentProjectId !== "undefined" && currentProjectId !== undefined) {
       fetchTokens();
       fetchProjectDetails();
+    } else {
+      console.log("Invalid project ID, fetching primary project instead");
+      fetchPrimaryProject();
     }
   }, [currentProjectId]);
 
@@ -182,6 +188,18 @@ const TokenAdministration: React.FC<TokenAdministrationProps> = ({
   // Fetch project details
   const fetchProjectDetails = async () => {
     try {
+      // Validate project ID before making the request
+      if (!currentProjectId || currentProjectId === "undefined") {
+        console.log("Invalid project ID detected in fetchProjectDetails:", currentProjectId);
+        toast({
+          title: "Error",
+          description: "Invalid project ID. Redirecting to primary project.",
+          variant: "destructive",
+        });
+        fetchPrimaryProject();
+        return;
+      }
+
       const { data, error } = await supabase
         .from("projects")
         .select("name")
@@ -198,6 +216,12 @@ const TokenAdministration: React.FC<TokenAdministrationProps> = ({
   // Fetch tokens for the current project
   const fetchTokens = async () => {
     try {
+      // Validate project ID before making the request
+      if (!currentProjectId || currentProjectId === "undefined") {
+        console.log("Invalid project ID detected in fetchTokens:", currentProjectId);
+        return;
+      }
+      
       setIsLoading(true);
       const { data, error } = await supabase
         .from("tokens")
@@ -666,6 +690,54 @@ const TokenAdministration: React.FC<TokenAdministrationProps> = ({
     holdersCount: tokenHolders.length,
     blockedCount: blockedHolders.length,
     lockedCount: lockedHolders.length,
+  };
+
+  // Function to fetch the primary project and navigate to it
+  const fetchPrimaryProject = async () => {
+    try {
+      console.log("No project ID provided, fetching primary project...");
+      
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("is_primary", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error("Error fetching primary project:", error);
+        // If no primary project found, fetch any project
+        if (error.code === 'PGRST116') {
+          const { data: anyProject, error: anyError } = await supabase
+            .from("projects")
+            .select("id, name")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (anyError) {
+            console.error("Error fetching any project:", anyError);
+            return;
+          }
+          
+          if (anyProject) {
+            console.log("No primary project found, using first available project:", anyProject);
+            // Navigate to the first available project
+            navigate(`/token-administration/${anyProject.id}`);
+          }
+        }
+        return;
+      }
+
+      if (data) {
+        console.log("Found primary project:", data);
+        // Navigate to the primary project
+        navigate(`/token-administration/${data.id}`);
+      }
+    } catch (err) {
+      console.error("Error in fetchPrimaryProject:", err);
+    }
   };
 
   return (

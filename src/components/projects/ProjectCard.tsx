@@ -14,7 +14,11 @@ import {
   Users,
   DollarSign,
   Calendar,
-  Coins
+  Coins,
+  Star,
+  File,
+  ChevronRight,
+  FileText
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -28,10 +32,16 @@ interface ProjectCardProps {
     token_symbol?: string;
     created_at?: string;
     updated_at?: string;
+    is_primary?: boolean;
+    fund_raise?: number;
+    total_token_supply?: number;
+    share_price?: number;
+    target_raise?: number;
   };
   stats?: {
     totalInvestors: number;
     totalRaised: number;
+    documentCount?: number;
   };
   onEdit: () => void;
   onDelete: () => void;
@@ -41,7 +51,7 @@ interface ProjectCardProps {
 
 const ProjectCard = ({
   project,
-  stats = { totalInvestors: 0, totalRaised: 0 },
+  stats = { totalInvestors: 0, totalRaised: 0, documentCount: 0 },
   onEdit,
   onDelete,
   onViewProject,
@@ -69,6 +79,12 @@ const ProjectCard = ({
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Format currency
+  const formatCurrency = (amount?: number) => {
+    if (amount === undefined || amount === null) return "Not set";
+    return `$${amount.toLocaleString()}`;
+  };
+
   // Add defensive checks to prevent accessing properties of undefined
   if (!project) {
     return (
@@ -83,19 +99,28 @@ const ProjectCard = ({
     );
   }
 
+  const targetRaise = project.target_raise || 0;
+  const raisedPercent = targetRaise > 0 ? Math.min(((stats.totalRaised || 0) / targetRaise) * 100, 100) : 0;
+
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col">
       <CardHeader className="pb-4">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-xl truncate" title={project?.name || ""}>
-            {project?.name || "Unnamed Project"}
-          </CardTitle>
+          <div className="flex items-center gap-1">
+            {project.is_primary && (
+              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            )}
+            <CardTitle className="text-xl truncate" title={project?.name || ""}>
+              {project?.name || "Unnamed Project"}
+            </CardTitle>
+          </div>
           {getStatusBadge(project?.status || "draft")}
         </div>
-        <p className="text-sm text-muted-foreground capitalize my-2">
+        <div className="text-sm text-muted-foreground capitalize my-2 flex items-center">
           {project?.project_type || "unknown"}{" "}
           {project?.token_symbol ? `• ${project.token_symbol}` : ""}
-        </p>
+          {project.is_primary && <Badge variant="outline" className="ml-2 bg-amber-50">Primary</Badge>}
+        </div>
       </CardHeader>
       <CardContent className="pb-4 flex-grow">
         <div className="border-l-4 border-primary/20 pl-3 mb-6">
@@ -103,6 +128,25 @@ const ProjectCard = ({
             {project?.description || "No description provided"}
           </p>
         </div>
+
+        {targetRaise > 0 && (
+          <div className="mb-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-muted-foreground">Fundraising Progress</span>
+              <span className="font-medium">{raisedPercent.toFixed(0)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-primary h-2.5 rounded-full" 
+                style={{ width: `${raisedPercent}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs mt-1">
+              <span>${stats.totalRaised?.toLocaleString() || 0}</span>
+              <span>Goal: ${targetRaise.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 text-sm mb-6">
           <div className="flex items-center gap-2 py-2 border-b border-gray-100">
@@ -115,15 +159,22 @@ const ProjectCard = ({
             <span className="font-medium">Total Raised:</span>
             <span className="ml-auto">${(stats?.totalRaised || 0).toLocaleString()}</span>
           </div>
+          {project.share_price !== undefined && (
+            <div className="flex items-center gap-2 py-2 border-b border-gray-100">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <span className="font-medium">Share Price:</span>
+              <span className="ml-auto">{formatCurrency(project.share_price)}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 py-2 border-b border-gray-100">
+            <FileText className="h-4 w-4 text-primary" />
+            <span className="font-medium">Documents:</span>
+            <span className="ml-auto">{stats?.documentCount || 0}</span>
+          </div>
           <div className="flex items-center gap-2 py-2 border-b border-gray-100">
             <Calendar className="h-4 w-4 text-primary" />
             <span className="font-medium">Created:</span>
             <span className="ml-auto">{formatDate(project?.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-2 py-2 border-b border-gray-100">
-            <Calendar className="h-4 w-4 text-primary" />
-            <span className="font-medium">Updated:</span>
-            <span className="ml-auto">{formatDate(project?.updated_at)}</span>
           </div>
         </div>
       </CardContent>
@@ -159,10 +210,33 @@ const ProjectCard = ({
               className="flex items-center gap-1 w-full"
             >
               <Coins className="h-4 w-4 mr-1" />
-              <span>Design</span>
+              <span>Token Design</span>
             </Button>
           </Link>
         </div>
+        <div className="grid grid-cols-1 gap-2 w-full">
+          <Link to={`/projects/${project.id}?tab=documents`} className="w-full">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-1 w-full"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              <span>Manage Documents ({stats?.documentCount || 0})</span>
+            </Button>
+          </Link>
+        </div>
+        <Link to={`/projects/${project.id}`} className="w-full">
+          <Button
+            variant="default"
+            size="sm"
+            className="flex items-center justify-center gap-1 w-full"
+            onClick={() => onViewProject(project.id)}
+          >
+            <span>View Details</span>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </Link>
       </CardFooter>
     </Card>
   );
